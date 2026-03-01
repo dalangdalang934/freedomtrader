@@ -8,7 +8,7 @@ import { decryptPrivateKey, isEncrypted, hasPassword, isUnlocked, unlock } from 
 const DEFAULT_TIP_RATE = 0;
 
 // FreedomRouter (ERC1967 Proxy)
-const FREEDOM_ROUTER = '0x7A86112117E8E87cF87b15ab1fB5c0B43D97d856';
+const FREEDOM_ROUTER = '0x87083948E696c19B1CE756dd6995D4a615a7f2c3';
 const TOKEN_MANAGER_V2 = '0x5c952063c7fc8610FFDB798152D69F0B9550762b';
 const WBNB = '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c';
 

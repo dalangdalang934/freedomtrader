@@ -93,7 +93,7 @@ npm run build
 
 | 合约 | 地址 |
 |------|------|
-| FreedomRouter (Proxy) | [`0x7A86112117E8E87cF87b15ab1fB5c0B43D97d856`](https://bscscan.com/address/0x7A86112117E8E87cF87b15ab1fB5c0B43D97d856) |
+| FreedomRouter (Proxy) | [`0x87083948E696c19B1CE756dd6995D4a615a7f2c3`](https://bscscan.com/address/0x87083948E696c19B1CE756dd6995D4a615a7f2c3) |
 | TokenManager V2 | [`0x5c952063c7fc8610FFDB798152D69F0B9550762b`](https://bscscan.com/address/0x5c952063c7fc8610FFDB798152D69F0B9550762b) |
 
 ## 技术栈
