@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Freedom Trader - 设置</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0d0d0d; min-height: 100vh; color: #fff; padding: 20px; }
+    .container { max-width: 600px; margin: 0 auto; }
+    .header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+    .logo { font-size: 20px; font-weight: 800; background: linear-gradient(90deg, #00d4aa, #00ff88); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .card { background: #151515; border: 1px solid #252525; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+    .card-title { font-size: 11px; color: #00d4aa; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; display: flex; justify-content: space-between; align-items: center; }
+    .card-title .actions { display: flex; gap: 8px; }
+    .form-group { margin-bottom: 12px; }
+    label { display: block; font-size: 12px; color: #888; margin-bottom: 6px; }
+    input, textarea { width: 100%; padding: 10px; border: 1px solid #333; border-radius: 8px; background: #1a1a1a; color: #fff; font-size: 13px; font-family: monospace; }
+    input:focus, textarea:focus { outline: none; border-color: #00d4aa; }
+    textarea { resize: vertical; min-height: 80px; }
+    .input-row { display: flex; gap: 8px; }
+    .input-row input { flex: 1; }
+    .btn { padding: 10px 16px; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .btn-primary { background: linear-gradient(135deg, #00d4aa, #00ff88); color: #000; }
+    .btn-primary:hover { opacity: 0.9; }
+    .btn-secondary { background: #252525; color: #888; }
+    .btn-secondary:hover { background: #333; color: #fff; }
+    .btn-danger { background: rgba(255, 107, 107, 0.2); color: #ff6b6b; }
+    .btn-danger:hover { background: rgba(255, 107, 107, 0.3); }
+    .btn-small { padding: 6px 10px; font-size: 11px; }
+    .btn-icon { background: transparent; border: none; cursor: pointer; font-size: 14px; padding: 4px; }
+    .warning { background: rgba(255, 193, 7, 0.1); border: 1px solid rgba(255, 193, 7, 0.3); border-radius: 8px; padding: 10px; font-size: 12px; color: #ffc107; margin-bottom: 16px; }
+    .address-preview { font-family: monospace; font-size: 11px; color: #00d4aa; margin-top: 6px; }
+    .nav { margin-bottom: 20px; }
+    .nav a { color: #888; text-decoration: none; font-size: 13px; }
+    .nav a:hover { color: #00d4aa; }
+    .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 12px 24px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity 0.3s; z-index: 1000; }
+    .toast.show { opacity: 1; }
+    .toast.success { background: #00d4aa; color: #000; }
+    .toast.error { background: #ff6b6b; color: #fff; }
+
+    .wallet-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #1a1a1a; border-radius: 8px; margin-bottom: 8px; border: 1px solid #222; }
+    .wallet-item:hover { border-color: #333; }
+    .wallet-info { display: flex; align-items: center; gap: 10px; flex: 1; }
+    .wallet-checkbox { width: 18px; height: 18px; cursor: pointer; accent-color: #00d4aa; }
+    .wallet-details { flex: 1; }
+    .wallet-name { font-size: 13px; font-weight: 600; color: #fff; }
+    .wallet-address { font-size: 10px; color: #666; font-family: monospace; margin-top: 2px; }
+    .wallet-actions { display: flex; gap: 4px; }
+    .wallet-list { max-height: 300px; overflow-y: auto; }
+    .wallet-list::-webkit-scrollbar { width: 4px; }
+    .wallet-list::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+
+    .batch-panel { display: none; }
+    .add-panel { display: block; }
+    .info-row { display: flex; justify-content: space-between; font-size: 12px; padding: 8px 0; border-bottom: 1px solid #222; }
+    .info-row:last-child { border-bottom: none; }
+    .info-label { color: #666; }
+    .info-value { color: #00d4aa; font-family: monospace; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav"><a href="trader.html">← 返回交易</a></div>
+    <div class="header">
+      <span style="font-size: 24px;">🦅</span>
+      <span class="logo">Freedom Trader</span>
+    </div>
+
+    <div class="warning">🔒 私钥使用密码加密存储，密码不保存在任何地方。完全免费，小费自愿。</div>
+
+    <!-- 密码 & 锁定 -->
+    <div class="card">
+      <div class="card-title">🔑 安全密码</div>
+      <div id="pwSetup" style="display:none;">
+        <div style="font-size:12px;color:#888;margin-bottom:10px;">首次使用，请设置密码。密码用于加密私钥，忘记则需重新导入。</div>
+        <div class="form-group"><input id="newPw" type="password" placeholder="设置密码（至少6位）"></div>
+        <div class="form-group"><input id="confirmPw" type="password" placeholder="确认密码"></div>
+        <button id="setPwBtn" class="btn btn-primary">设置密码</button>
+      </div>
+      <div id="pwUnlock" style="display:none;">
+        <div class="form-group"><input id="unlockPw" type="password" placeholder="输入密码解锁"></div>
+        <button id="unlockBtn" class="btn btn-primary">解锁</button>
+      </div>
+      <div id="pwManage" style="display:none;">
+        <div style="font-size:12px;color:#00d4aa;margin-bottom:10px;">✓ 已解锁</div>
+        <div class="form-group">
+          <label>自动锁定时间</label>
+          <select id="lockDuration" style="width:100%;padding:8px;border:1px solid #333;border-radius:8px;background:#1a1a1a;color:#fff;font-size:13px;">
+            <option value="5">5 分钟</option>
+            <option value="15">15 分钟</option>
+            <option value="30" selected>30 分钟</option>
+            <option value="60">1 小时</option>
+            <option value="240">4 小时</option>
+            <option value="1440">永不锁定</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button id="saveLockBtn" class="btn btn-primary btn-small">保存</button>
+          <button id="changePwBtn" class="btn btn-secondary btn-small">修改密码</button>
+          <button id="lockNowBtn" class="btn btn-danger btn-small">立即锁定</button>
+        </div>
+      </div>
+      <div id="pwChange" style="display:none;">
+        <div class="form-group"><input id="oldPw" type="password" placeholder="当前密码"></div>
+        <div class="form-group"><input id="chNewPw" type="password" placeholder="新密码（至少6位）"></div>
+        <div class="form-group"><input id="chConfirmPw" type="password" placeholder="确认新密码"></div>
+        <div style="display:flex;gap:8px;">
+          <button id="confirmChangePwBtn" class="btn btn-primary btn-small">确认修改</button>
+          <button id="cancelChangePwBtn" class="btn btn-secondary btn-small">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 钱包管理 -->
+    <div class="card">
+      <div class="card-title">
+        <span>🔐 钱包管理</span>
+        <div class="actions">
+          <button id="selectAllBtn" class="btn btn-small btn-secondary">全选</button>
+          <button id="clearAllBtn" class="btn btn-small btn-danger">清空</button>
+        </div>
+      </div>
+
+      <!-- 钱包列表 -->
+      <div id="walletList" class="wallet-list"></div>
+
+      <!-- 添加钱包 -->
+      <div id="addPanel" class="add-panel" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #222;">
+        <div class="input-row">
+          <input id="walletName" type="text" placeholder="钱包名称 (可选)" style="flex: 0 0 120px;">
+          <input id="privateKey" type="text" placeholder="私钥">
+        </div>
+        <div id="addressPreview" class="address-preview"></div>
+        <div style="display: flex; gap: 8px; margin-top: 10px;">
+          <button id="addWalletBtn" class="btn btn-primary">添加钱包</button>
+          <button id="batchAddBtn" class="btn btn-secondary">批量添加</button>
+        </div>
+      </div>
+
+      <!-- 批量添加 -->
+      <div id="batchPanel" class="batch-panel" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #222;">
+        <label>批量添加私钥 (每行一个，支持 "名称:私钥" 格式)</label>
+        <textarea id="batchKeys" placeholder="私钥1&#10;钱包2:0x...&#10;私钥3" style="min-height: 120px;"></textarea>
+        <div style="display: flex; gap: 8px; margin-top: 10px;">
+          <button id="confirmBatchBtn" class="btn btn-primary">确认添加</button>
+          <button id="cancelBatchBtn" class="btn btn-secondary">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- RPC 配置（必填，无默认值） -->
+    <div class="card">
+      <div class="card-title">🌐 RPC 配置</div>
+      <div class="form-group">
+        <input id="rpcUrl" type="text" placeholder="请输入 BSC RPC URL">
+      </div>
+      <button id="saveRpcBtn" class="btn btn-primary btn-small">保存 RPC</button>
+    </div>
+
+    <!-- 小费设置（0-1%，收款地址固定） -->
+    <div class="card">
+      <div class="card-title">💝 支持开发者（可选）</div>
+      <div style="font-size: 12px; color: #888; margin-bottom: 12px; line-height: 1.6;">
+        FT 完全免费！如果你觉得好用，可以设置一点小费支持后续开发。<br>
+        设为 <b style="color:#00d4aa">0</b> = 完全免费，设为 <b style="color:#00d4aa">0.1</b> = 0.1% 小费
+      </div>
+      <div class="form-group">
+        <label class="info-label">小费比例（0–1%）</label>
+        <input id="tipRate" type="number" min="0" max="1" step="0.01" placeholder="0" style="width:100%;padding:8px;">
+      </div>
+      <button id="saveTipBtn" class="btn btn-primary btn-small">保存小费设置</button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <script src="settings.js"></script>
+</body>
+</html>

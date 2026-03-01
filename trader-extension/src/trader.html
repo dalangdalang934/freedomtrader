@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Freedom Trader - BSC 土狗交易终端</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', -apple-system, sans-serif;
+      background: #0d0d0d;
+      min-height: 100vh;
+      color: #fff;
+      width: 100%;
+    }
+    .header {
+      background: linear-gradient(90deg, #1a1a2e, #16213e);
+      padding: 10px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid #00d4aa;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .logo-icon { font-size: 20px; }
+    .logo-text {
+      font-size: 16px;
+      font-weight: 800;
+      background: linear-gradient(90deg, #00d4aa, #00ff88);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .logo-sub {
+      font-size: 9px;
+      color: #666;
+      margin-left: 6px;
+    }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .wallet-count {
+      font-size: 10px;
+      color: #00d4aa;
+      background: rgba(0, 212, 170, 0.15);
+      padding: 3px 6px;
+      border-radius: 4px;
+    }
+    .settings-btn {
+      background: rgba(255,255,255,0.1);
+      border: none;
+      color: #888;
+      cursor: pointer;
+      font-size: 14px;
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+    .settings-btn:hover { background: rgba(255,255,255,0.2); color: #fff; }
+
+    .main {
+      padding: 12px;
+    }
+
+    /* 钱包选择器 */
+    .wallet-selector-card {
+      background: #151515;
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 12px;
+      border: 1px solid #252525;
+    }
+    .wallet-selector-title {
+      font-size: 11px;
+      color: #888;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .wallet-selector-title span { color: #00d4aa; }
+    .wallet-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .wallet-chip {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 10px;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 16px;
+      cursor: pointer;
+      font-size: 11px;
+      transition: all 0.2s;
+    }
+    .wallet-chip:hover { border-color: #555; }
+    .wallet-chip.active {
+      border-color: #00d4aa;
+      background: rgba(0, 212, 170, 0.1);
+    }
+    .wallet-chip.error {
+      border-color: #ff6b6b;
+      opacity: 0.5;
+    }
+    .wallet-chip-name { color: #fff; }
+    .wallet-check {
+      width: 14px;
+      height: 14px;
+      accent-color: #00d4aa;
+    }
+
+    .balance-card {
+      background: linear-gradient(135deg, #1e3a5f 0%, #0d2137 100%);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      border: 1px solid rgba(0, 212, 170, 0.2);
+    }
+    .balance-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .balance-item {
+      text-align: center;
+      flex: 1;
+    }
+    .balance-item:first-child {
+      border-right: 1px solid rgba(255,255,255,0.1);
+    }
+    .balance-label {
+      font-size: 10px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .balance-value {
+      font-size: 20px;
+      font-weight: 700;
+      color: #00d4aa;
+      margin-top: 4px;
+    }
+    .balance-value.bnb-value { color: #f0b90b; }
+
+    .balance-details {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      max-height: 120px;
+      overflow-y: auto;
+    }
+    .balance-row-item {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      padding: 4px 0;
+      color: #888;
+    }
+    .balance-row-item span:last-child { color: #f0b90b; }
+
+    .trade-card {
+      background: #151515;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      border: 1px solid #252525;
+    }
+    .card-title {
+      font-size: 11px;
+      color: #00d4aa;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .tabs {
+      display: flex;
+      margin-bottom: 16px;
+      gap: 8px;
+    }
+    .tab {
+      flex: 1;
+      padding: 10px;
+      text-align: center;
+      border: none;
+      background: #1a1a1a;
+      color: #666;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: all 0.2s;
+      text-transform: uppercase;
+    }
+    .tab.buy.active {
+      background: linear-gradient(135deg, #00d4aa, #00ff88);
+      color: #000;
+    }
+    .tab.sell.active {
+      background: linear-gradient(135deg, #ff6b6b, #ff4757);
+      color: #fff;
+    }
+    .tab:hover:not(.active) { background: #252525; color: #fff; }
+
+    .form-group { margin-bottom: 12px; }
+    label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: #666;
+      margin-bottom: 6px;
+    }
+    label span { color: #00d4aa; cursor: pointer; }
+    input, select {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #333;
+      border-radius: 8px;
+      background: #1a1a1a;
+      color: #fff;
+      font-size: 14px;
+    }
+    input:focus, select:focus { outline: none; border-color: #00d4aa; }
+    input::placeholder { color: #444; }
+    .input-group {
+      display: flex;
+      gap: 8px;
+    }
+    .input-group input { flex: 1; }
+    .input-group button {
+      padding: 0 14px;
+      background: #252525;
+      border: 1px solid #333;
+      border-radius: 8px;
+      color: #00d4aa;
+      font-weight: 700;
+      cursor: pointer;
+      font-size: 11px;
+    }
+    .input-group button:hover { background: #333; }
+
+    .quick-row {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .quick-btn {
+      flex: 1;
+      padding: 8px;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 6px;
+      color: #888;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .quick-btn:hover { border-color: #00d4aa; color: #00d4aa; }
+
+    .settings-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .setting-item { flex: 1; }
+    .setting-item label { display: block; margin-bottom: 6px; }
+    .setting-item input { padding: 8px 10px; font-size: 12px; }
+
+    .btn-trade {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .btn-buy {
+      background: linear-gradient(135deg, #00d4aa, #00ff88);
+      color: #000;
+    }
+    .btn-sell {
+      background: linear-gradient(135deg, #ff6b6b, #ff4757);
+      color: #fff;
+    }
+    .btn-trade:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0, 212, 170, 0.3); }
+    .btn-sell:hover:not(:disabled) { box-shadow: 0 4px 20px rgba(255, 107, 107, 0.3); }
+    .btn-trade:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    .status-bar {
+      padding: 10px;
+      border-radius: 8px;
+      margin-top: 12px;
+      font-size: 12px;
+      text-align: center;
+      font-family: monospace;
+    }
+    .status-bar.pending { background: rgba(255, 193, 7, 0.15); color: #ffc107; border: 1px solid rgba(255, 193, 7, 0.3); }
+    .status-bar.success { background: rgba(0, 212, 170, 0.15); color: #00d4aa; border: 1px solid rgba(0, 212, 170, 0.3); }
+    .status-bar.error { background: rgba(255, 107, 107, 0.15); color: #ff6b6b; border: 1px solid rgba(255, 107, 107, 0.3); }
+
+    /* 顶部弹窗 Toast */
+    .toast {
+      position: fixed;
+      top: 8px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-100px);
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      z-index: 9999;
+      opacity: 0;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    .toast.success {
+      background: linear-gradient(135deg, #00d4aa, #00ff88);
+      color: #000;
+    }
+    .toast.error {
+      background: linear-gradient(135deg, #ff6b6b, #ff4757);
+      color: #fff;
+    }
+    .toast.pending {
+      background: linear-gradient(135deg, #f0b90b, #ffc107);
+      color: #000;
+    }
+
+    /* 卖出百分比按钮 */
+    .percent-row {
+      display: none;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .percent-row.show { display: flex; }
+    .percent-btn {
+      flex: 1;
+      padding: 8px;
+      background: rgba(255, 107, 107, 0.1);
+      border: 1px solid rgba(255, 107, 107, 0.3);
+      border-radius: 6px;
+      color: #ff6b6b;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .percent-btn:hover {
+      background: rgba(255, 107, 107, 0.2);
+      border-color: #ff6b6b;
+    }
+
+    .no-config {
+      text-align: center;
+      padding: 60px 20px;
+    }
+    .no-config p { color: #666; margin-bottom: 20px; }
+    .no-config .emoji { font-size: 48px; margin-bottom: 16px; }
+
+    .slippage-presets {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .slippage-btn {
+      flex: 1;
+      padding: 6px;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 4px;
+      color: #888;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .slippage-btn.active {
+      border-color: #00d4aa;
+      color: #00d4aa;
+      background: rgba(0, 212, 170, 0.1);
+    }
+    .slippage-btn:hover:not(.active) { border-color: #555; color: #fff; }
+
+    .warning-box {
+      background: rgba(255, 193, 7, 0.1);
+      border: 1px solid rgba(255, 193, 7, 0.3);
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 11px;
+      color: #ffc107;
+      margin-bottom: 12px;
+      display: none;
+    }
+    .warning-box.show { display: block; }
+
+    #priceInfo {
+      background: #1a1a1a;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+      font-size: 11px;
+    }
+    #lpInfo {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">
+      <span class="logo-icon">🦅</span>
+      <span class="logo-text">Freedom Trader</span>
+      <span class="logo-sub">FT · 免费交易</span>
+    </div>
+    <div class="header-right">
+      <div id="walletCount" class="wallet-count">0/0</div>
+      <button id="settingsBtn" class="settings-btn">⚙️</button>
+    </div>
+  </div>
+
+  <!-- 顶部弹窗 -->
+  <div id="toast" class="toast"></div>
+
+  <!-- 解锁遮罩层 -->
+  <div id="lockOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:9000;display:none;align-items:center;justify-content:center;">
+    <div style="text-align:center;max-width:320px;padding:20px;">
+      <div style="font-size:48px;margin-bottom:16px;">🔒</div>
+      <div id="lockTitle" style="font-size:16px;font-weight:700;margin-bottom:8px;color:#fff;">请输入密码解锁</div>
+      <div id="lockDesc" style="font-size:12px;color:#888;margin-bottom:20px;">首次使用请先在设置中设置密码</div>
+      <div id="lockInputArea" style="display:none;">
+        <input id="lockPwInput" type="password" placeholder="输入密码" style="width:100%;padding:12px;border:1px solid #333;border-radius:8px;background:#1a1a1a;color:#fff;font-size:14px;margin-bottom:12px;text-align:center;">
+        <button id="lockUnlockBtn" style="width:100%;padding:12px;border:none;border-radius:10px;background:linear-gradient(135deg,#00d4aa,#00ff88);color:#000;font-size:14px;font-weight:700;cursor:pointer;">解锁</button>
+        <div id="lockError" style="font-size:12px;color:#ff6b6b;margin-top:8px;display:none;"></div>
+      </div>
+      <button id="lockGoSettings" style="margin-top:16px;padding:10px 24px;border:none;border-radius:8px;background:#252525;color:#888;font-size:13px;cursor:pointer;">前往设置</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div id="noConfig" class="no-config" style="display: none;">
+      <div class="emoji">🔐</div>
+      <p>请先在设置中添加钱包</p>
+      <button id="goSettingsBtn" class="btn-trade btn-buy" style="width: auto; padding: 12px 32px;">
+        前往设置
+      </button>
+    </div>
+
+    <div id="tradeUI">
+      <!-- 钱包选择器 -->
+      <div class="wallet-selector-card">
+        <div class="wallet-selector-title">
+          <span>选择钱包 (已选 <span id="selectedCount">0</span> 个)</span>
+          <span>点击切换</span>
+        </div>
+        <div id="walletSelector" class="wallet-chips"></div>
+      </div>
+
+      <div class="balance-card">
+        <div class="balance-row">
+          <div class="balance-item">
+            <div class="balance-label">BNB 总余额</div>
+            <div class="balance-value bnb-value" id="bnbBalance">0.000</div>
+          </div>
+          <div class="balance-item">
+            <div class="balance-label">代币总余额</div>
+            <div class="balance-value" id="tokenBalanceDisplay">-</div>
+          </div>
+        </div>
+        <div id="balanceDetails" class="balance-details"></div>
+      </div>
+
+      <div class="trade-card">
+        <div class="card-title">💰 批量交易</div>
+
+        <div class="tabs">
+          <button type="button" class="tab buy active" id="tabBuy">📈 买入</button>
+          <button type="button" class="tab sell" id="tabSell">📉 卖出</button>
+        </div>
+
+        <div class="form-group">
+          <label>
+            代币合约地址
+            <span id="pasteBtn">粘贴</span>
+          </label>
+          <input id="tokenAddress" type="text" placeholder="0x... 输入代币合约地址">
+        </div>
+
+        <div class="form-group">
+          <label>
+            <span id="amountLabel">买入数量 (BNB/钱包)</span>
+            <span id="balanceHint">每个钱包的交易数量</span>
+          </label>
+          <div class="input-group">
+            <input id="amount" type="number" placeholder="0.0" step="0.001">
+            <button type="button" id="maxBtn">MAX</button>
+          </div>
+          <!-- 买入快捷金额 -->
+          <div id="buyQuickRow" class="quick-row">
+            <button type="button" class="quick-btn" data-amt="0.01">0.01</button>
+            <button type="button" class="quick-btn" data-amt="0.05">0.05</button>
+            <button type="button" class="quick-btn" data-amt="0.1">0.1</button>
+            <button type="button" class="quick-btn" data-amt="0.5">0.5</button>
+            <button type="button" class="quick-btn" data-amt="1">1</button>
+          </div>
+          <!-- 卖出百分比按钮 -->
+          <div id="sellPercentRow" class="percent-row">
+            <button type="button" class="percent-btn" data-pct="25">25%</button>
+            <button type="button" class="percent-btn" data-pct="50">50%</button>
+            <button type="button" class="percent-btn" data-pct="75">75%</button>
+            <button type="button" class="percent-btn" data-pct="100">100%</button>
+          </div>
+        </div>
+
+        <div id="priceInfo" style="display:none;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+            <span style="color:#666;">预估单价</span>
+            <span id="estimatedPrice" style="color:#00d4aa;font-family:monospace;">-</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;">
+            <span style="color:#666;">最低获得</span>
+            <span id="minOutput" style="color:#f0b90b;font-family:monospace;">-</span>
+          </div>
+        </div>
+
+        <div class="warning-box" id="warningBox">
+          ⚠️ 滑点设置较高 (≥25%)，可能被三明治攻击
+        </div>
+
+        <div class="settings-row">
+          <div class="setting-item">
+            <label>滑点 (%)</label>
+            <div class="slippage-presets">
+              <button type="button" class="slippage-btn" data-slip="5">5%</button>
+              <button type="button" class="slippage-btn" data-slip="10">10%</button>
+              <button type="button" class="slippage-btn" data-slip="15">15%</button>
+              <button type="button" class="slippage-btn" data-slip="25">25%</button>
+              <button type="button" class="slippage-btn" data-slip="49">49%</button>
+            </div>
+            <input id="slippage" type="number" value="15" min="0.1" max="100" step="0.1">
+          </div>
+          <div class="setting-item">
+            <label>Gas Price (Gwei)</label>
+            <input id="gasPriceInput" type="number" value="3" min="1" max="100" step="0.5">
+          </div>
+        </div>
+
+        <button type="button" id="tradeBtn" class="btn-trade btn-buy">
+          🚀 买入
+        </button>
+
+        <div id="statusBar" class="status-bar" style="display: none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="trader.js"></script>
+</body>
+</html>

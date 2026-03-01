@@ -1,0 +1,17 @@
+{
+  "name": "freedom-trader",
+  "version": "1.0.0",
+  "description": "Freedom Trader - 免费 BSC 土狗交易终端",
+  "scripts": {
+    "bundle": "node scripts/bundle.js",
+    "build": "node scripts/build.js",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "viem": "^2.23.2"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "javascript-obfuscator": "^4.1.0"
+  }
+}

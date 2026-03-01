@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "Freedom Trader",
+  "version": "1.0.0",
+  "description": "免费 BSC 土狗交易终端 - 多钱包批量交易，自定义滑点，小费自愿",
+  "permissions": [
+    "storage",
+    "clipboardRead",
+    "downloads",
+    "sidePanel",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://*.blockrazor.xyz/*",
+    "https://*.binance.org/*",
+    "https://*.bscscan.com/*"
+  ],
+  "action": {
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "src/trader.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}

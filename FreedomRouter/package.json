@@ -1,0 +1,22 @@
+{
+  "name": "freedom-router",
+  "version": "1.0.0",
+  "description": "Unified DEX Router for Internal (Four) and External Markets",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:bsc": "hardhat run scripts/deploy.js --network bsc",
+    "deploy:testnet": "hardhat run scripts/deploy.js --network bscTestnet",
+    "test:trade": "hardhat run scripts/test-trade.js --network bsc",
+    "test:buy": "hardhat run scripts/test-buy.js --network bsc",
+    "test:sell": "hardhat run scripts/test-sell.js --network bsc"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "dotenv": "^16.3.1",
+    "hardhat": "^2.19.0"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.6.1"
+  }
+}
