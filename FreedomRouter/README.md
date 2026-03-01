@@ -36,7 +36,7 @@ BSC 聚合路由合约 — 一个入口交易所有 Four.meme MEME 代币。
 
 | 合约 | 地址 |
 |------|------|
-| **FreedomRouter (Proxy)** | `0x4Aa6695B513804226313C73fD63CF3880f48efef` |
+| **FreedomRouter (Proxy)** | `0x7A86112117E8E87cF87b15ab1fB5c0B43D97d856` |
 | TokenManager V1 | `0xEC4549caDcE5DA21Df6E6422d448034B5233bFbC` |
 | TokenManager V2 | `0x5c952063c7fc8610FFDB798152D69F0B9550762b` |
 | TokenManagerHelper3 | `0xF251F83e40a78868FcfA3FA4599Dad6494E46034` |
@@ -119,7 +119,7 @@ npx hardhat run scripts/deploy.js --network bsc
 
 ```
 PRIVATE_KEY=0x...
-ROUTER_ADDRESS=0x4Aa6695B513804226313C73fD63CF3880f48efef
+ROUTER_ADDRESS=0x7A86112117E8E87cF87b15ab1fB5c0B43D97d856
 TOKEN_ADDRESS=0x...
 CMD=test    # info | buy | sell | test
 TIP=0       # 0=免费, 10=0.1%

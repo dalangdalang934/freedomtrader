@@ -93,8 +93,8 @@ npm run build
 
 | 合约 | 地址 |
 |------|------|
-| FreedomRouter (Proxy) | `0x7A86112117E8E87cF87b15ab1fB5c0B43D97d856` |
-| TokenManager V2 | `0x5c952063c7fc8610FFDB798152D69F0B9550762b` |
+| FreedomRouter (Proxy) | [`0x7A86112117E8E87cF87b15ab1fB5c0B43D97d856`](https://bscscan.com/address/0x7A86112117E8E87cF87b15ab1fB5c0B43D97d856) |
+| TokenManager V2 | [`0x5c952063c7fc8610FFDB798152D69F0B9550762b`](https://bscscan.com/address/0x5c952063c7fc8610FFDB798152D69F0B9550762b) |
 
 ## 技术栈
 
@@ -116,8 +116,7 @@ trader-extension/
 ├── background.js       # Service Worker：密钥缓存 + URL 合约识别
 ├── manifest.json
 ├── scripts/
-│   ├── build.js        # esbuild 构建
-│   └── bench-tx-timing.mjs  # 交易耗时测量工具
+│   └── build.js        # esbuild 构建
 └── dist/               # 构建输出，加载到 Chrome
 ```
 
