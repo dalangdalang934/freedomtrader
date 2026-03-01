@@ -1,0 +1,31 @@
+name: Compile Contracts
+
+on:
+  push:
+    paths:
+      - 'FreedomRouter/**'
+      - '.github/workflows/compile-contracts.yml'
+  workflow_dispatch:
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: FreedomRouter
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci
+
+      - run: npx hardhat compile
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: contracts-abi-${{ github.sha }}
+          path: FreedomRouter/artifacts/contracts/FreedomRouter.sol/

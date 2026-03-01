@@ -1,0 +1,31 @@
+name: Build Extension
+
+on:
+  push:
+    paths:
+      - 'trader-extension/**'
+      - '.github/workflows/build-extension.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: trader-extension
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: freedom-trader-${{ github.sha }}
+          path: trader-extension/dist/
