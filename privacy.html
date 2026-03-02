@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — Freedom Trader</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: #0a0a0f; color: #e0e0e0; line-height: 1.7; }
+    .container { max-width: 720px; margin: 0 auto; padding: 40px 24px 80px; }
+    h1 { font-size: 28px; font-weight: 800; background: linear-gradient(135deg, #00d4aa, #00ff88); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 6px; }
+    .updated { font-size: 13px; color: #666; margin-bottom: 36px; }
+    h2 { font-size: 18px; font-weight: 700; color: #00d4aa; margin-top: 32px; margin-bottom: 12px; }
+    h3 { font-size: 15px; font-weight: 600; color: #aaa; margin-top: 20px; margin-bottom: 8px; }
+    p { margin-bottom: 12px; color: #ccc; font-size: 14px; }
+    ul, ol { margin: 8px 0 16px 20px; }
+    li { margin-bottom: 6px; color: #ccc; font-size: 14px; }
+    strong { color: #fff; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0 20px; font-size: 13px; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #1e1e2e; }
+    th { color: #00d4aa; font-weight: 600; background: #12121a; }
+    td { color: #ccc; }
+    code { background: #1a1a2e; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #00d4aa; }
+    a { color: #00d4aa; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .logo { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+    .logo span { font-size: 28px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo"><span>🦅</span><h1>Privacy Policy</h1></div>
+    <p class="updated">Last updated: March 2, 2026</p>
+
+    <h2>Overview</h2>
+    <p>Freedom Trader is a browser extension that provides a DeFi trading interface for the BNB Smart Chain (BSC). We are committed to protecting your privacy. This policy explains what data is collected, how it is stored, and how it is used.</p>
+
+    <h2>Data Collection</h2>
+    <p>Freedom Trader does <strong>NOT</strong> collect, transmit, or share any personal data with external servers. All data stays on your device.</p>
+
+    <h3>What is stored locally</h3>
+    <p>The following data is stored exclusively in your browser's local storage (<code>chrome.storage.local</code>):</p>
+    <ul>
+      <li><strong>Encrypted wallet private keys</strong> — Private keys are encrypted using AES-GCM-256 with a user-defined password before storage. The password itself is never stored.</li>
+      <li><strong>Password verification hash</strong> — A PBKDF2-derived hash (100,000 iterations, SHA-256) used solely to verify your password locally.</li>
+      <li><strong>Cryptographic salt</strong> — A randomly generated salt used for key derivation, stored locally.</li>
+      <li><strong>User preferences</strong> — RPC URL, slippage settings, gas price, tip rate, and UI customization.</li>
+    </ul>
+
+    <h3>What is NOT collected</h3>
+    <ul>
+      <li>No analytics or telemetry</li>
+      <li>No browsing history</li>
+      <li>No personal identifiers (name, email, phone, etc.)</li>
+      <li>No wallet addresses or balances sent to any server</li>
+      <li>No cookies or tracking pixels</li>
+    </ul>
+
+    <h2>Data Transmission</h2>
+    <p>Freedom Trader communicates <strong>only</strong> with:</p>
+    <ol>
+      <li><strong>BSC RPC nodes</strong> — To query balances, token info, and submit transactions. The RPC URL is user-configurable. Only blockchain transaction data is transmitted (wallet addresses, transaction parameters).</li>
+      <li><strong>BNB Smart Chain</strong> — On-chain transactions are broadcast to the public blockchain network.</li>
+    </ol>
+    <p>No data is ever sent to Freedom Trader's developers or any third-party analytics service.</p>
+
+    <h2>Encryption &amp; Security</h2>
+    <ul>
+      <li>Private keys are encrypted with <strong>AES-GCM-256</strong> using a key derived via <strong>PBKDF2</strong> (100,000 iterations, SHA-256).</li>
+      <li>The encryption key is cached only in the extension's background service worker memory and is never written to disk.</li>
+      <li>Auto-lock clears the cached key after a user-configurable timeout (default: 30 minutes).</li>
+      <li>The password is never stored — only a derived hash is kept for verification.</li>
+    </ul>
+
+    <h2>Permissions</h2>
+    <table>
+      <thead><tr><th>Permission</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code>storage</code></td><td>Store encrypted wallets and user preferences locally</td></tr>
+        <tr><td><code>sidePanel</code></td><td>Display the trading interface in Chrome's side panel</td></tr>
+        <tr><td><code>tabs</code></td><td>Detect contract addresses from supported websites (BSCScan, DEX platforms) to auto-fill the token address field</td></tr>
+        <tr><td>Host permissions</td><td>Enable automatic contract address detection on <code>blockrazor.xyz</code>, <code>binance.org</code>, <code>bscscan.com</code></td></tr>
+      </tbody>
+    </table>
+
+    <h2>Third-Party Services</h2>
+    <p>Freedom Trader does not integrate any third-party analytics, advertising, or tracking services. The only external communication is with user-configured BSC RPC endpoints for blockchain interaction.</p>
+
+    <h2>Data Deletion</h2>
+    <p>All data can be deleted by:</p>
+    <ol>
+      <li>Removing all wallets in the Settings page, or</li>
+      <li>Uninstalling the extension (all <code>chrome.storage.local</code> data is automatically removed by Chrome).</li>
+    </ol>
+
+    <h2>Open Source</h2>
+    <p>Freedom Trader is open source. You can audit the complete source code at:<br>
+    <a href="https://github.com/dalangdalang934/freedomtrader">https://github.com/dalangdalang934/freedomtrader</a></p>
+
+    <h2>Changes to This Policy</h2>
+    <p>We may update this privacy policy from time to time. Changes will be posted in this document with an updated "Last updated" date.</p>
+
+    <h2>Contact</h2>
+    <p>If you have questions about this privacy policy, please open an issue on our GitHub repository:<br>
+    <a href="https://github.com/dalangdalang934/freedomtrader/issues">https://github.com/dalangdalang934/freedomtrader/issues</a></p>
+  </div>
+</body>
+</html>
