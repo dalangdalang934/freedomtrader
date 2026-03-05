@@ -14,7 +14,8 @@ const STATIC_FILES = [
   'icon48.png',
   'icon128.png',
   'src/trader.html',
-  'src/settings.html'
+  'src/settings.html',
+  'src/theme.js'
 ];
 
 function ensureDir(dir) {

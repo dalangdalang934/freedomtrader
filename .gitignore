@@ -7,3 +7,11 @@ FreedomRouter/artifacts/
 FreedomRouter/cache/
 FreedomRouter/deployment.json
 trader-extension/dist/
+trader-extension/*.zip
+*.zip
+bsc-hook/
+references/
+docs/
+sol-trader/
+*.py
+trader-extension/test-*.mjs

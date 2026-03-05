@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Freedom Trader",
-  "version": "1.0.0",
-  "description": "免费 BSC DeFi 聚合交易终端 - 多钱包批量交易，自定义滑点，小费自愿",
+  "version": "2.0.0",
+  "description": "BSC + Solana 双链聚合交易终端 — 0 手续费买卖，多钱包批量交易，Pump.fun / PumpSwap / Four.meme / PancakeSwap 全覆盖，Jito 加速上链",
   "minimum_chrome_version": "114",
   "permissions": [
     "storage",
@@ -12,10 +12,21 @@
   "host_permissions": [
     "https://*.blockrazor.xyz/*",
     "https://*.binance.org/*",
-    "https://*.bscscan.com/*"
+    "https://*.bscscan.com/*",
+    "https://*.solana.com/*",
+    "https://*.publicnode.com/*",
+    "https://*.drpc.org/*",
+    "https://*.helius-rpc.com/*",
+    "https://*.quicknode.pro/*",
+    "https://*.rpcpool.com/*",
+    "https://*.triton.one/*",
+    "https://*.bnbchain.org/*",
+    "https://*.getblock.io/*",
+    "https://*.jito.wtf/*",
+    "https://*.48.club/*"
   ],
   "action": {
-    "default_title": "Freedom Trader - BSC 聚合交易",
+    "default_title": "Freedom Trader - BSC/SOL 聚合交易",
     "default_icon": {
       "16": "icon16.png",
       "48": "icon48.png",

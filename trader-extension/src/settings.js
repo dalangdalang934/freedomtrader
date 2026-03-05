@@ -1,5 +1,7 @@
 // 设置页面 - 多钱包管理 + 密码安全
 import { privateKeyToAccount } from 'viem/accounts';
+import { Keypair } from '@solana/web3.js';
+import bs58 from 'bs58';
 import {
   encryptPrivateKey, decryptPrivateKey, isEncrypted,
   setPassword, unlock, lock, isUnlocked, hasPassword,
@@ -15,21 +17,30 @@ function escapeHtml(str) {
 }
 
 let wallets = [];
+let solWallets = [];
 let unlocked = false;
 
 // 加载配置
 async function loadConfig() {
   await initPasswordUI();
 
-  const config = await chrome.storage.local.get(['wallets', 'rpcUrl', 'activeWalletIds', 'tipRate']);
+  const config = await chrome.storage.local.get([
+    'wallets', 'rpcUrl', 'activeWalletIds', 'tipRate',
+    'solWallets', 'solRpcUrl', 'solWssUrl', 'solActiveWalletIds',
+  ]);
 
   wallets = config.wallets || [];
+  solWallets = config.solWallets || [];
   const activeIds = config.activeWalletIds || [];
+  const solActiveIds = config.solActiveWalletIds || [];
 
   $('rpcUrl').value = config.rpcUrl ?? '';
+  $('solRpcUrl').value = config.solRpcUrl ?? '';
+  $('solWssUrl').value = config.solWssUrl ?? '';
   $('tipRate').value = config.tipRate != null && config.tipRate !== '' ? config.tipRate : '';
 
   renderWalletList(activeIds);
+  renderSolWalletList(solActiveIds);
 }
 
 // ==================== 密码 & 锁定管理 ====================
@@ -171,7 +182,12 @@ function renderWalletList(activeIds = []) {
 
 // 添加单个钱包
 async function addWallet() {
-  if (!unlocked) { showToast('请先解锁', 'error'); return; }
+  if (!unlocked || !(await isUnlocked())) {
+    unlocked = false;
+    await initPasswordUI();
+    showToast('已锁定，请先解锁', 'error');
+    return;
+  }
   const name = $('walletName').value.trim() || `钱包 ${wallets.length + 1}`;
   let privateKey = $('privateKey').value.trim();
 
@@ -209,13 +225,24 @@ async function addWallet() {
     renderWalletList();
     showToast('钱包已添加', 'success');
   } catch (e) {
+    if ((e?.message || '').includes('未解锁')) {
+      unlocked = false;
+      await initPasswordUI();
+      showToast('已锁定，请先解锁', 'error');
+      return;
+    }
     showToast('私钥格式错误', 'error');
   }
 }
 
 // 批量添加钱包
 async function batchAddWallets() {
-  if (!unlocked) { showToast('请先解锁', 'error'); return; }
+  if (!unlocked || !(await isUnlocked())) {
+    unlocked = false;
+    await initPasswordUI();
+    showToast('已锁定，请先解锁', 'error');
+    return;
+  }
   const text = $('batchKeys').value.trim();
   if (!text) {
     showToast('请输入私钥', 'error');
@@ -253,7 +280,13 @@ async function batchAddWallets() {
         encryptedKey: encrypted
       });
       added++;
-    } catch {
+    } catch (e) {
+      if ((e?.message || '').includes('未解锁')) {
+        unlocked = false;
+        await initPasswordUI();
+        showToast('已锁定，请先解锁', 'error');
+        return;
+      }
       failed++;
     }
   }
@@ -353,6 +386,221 @@ async function saveRpc() {
   showToast('RPC已保存', 'success');
 }
 
+async function saveSolRpc() {
+  const solRpcUrl = $('solRpcUrl').value.trim();
+  const solWssUrl = $('solWssUrl').value.trim();
+  if (solRpcUrl && !/^https?:\/\/.+/.test(solRpcUrl)) {
+    showToast('SOL RPC URL 格式错误，需以 http:// 或 https:// 开头', 'error');
+    return;
+  }
+  if (solWssUrl && !/^wss?:\/\/.+/.test(solWssUrl)) {
+    showToast('WSS URL 格式错误，需以 wss:// 开头', 'error');
+    return;
+  }
+  await chrome.storage.local.set({ solRpcUrl, solWssUrl });
+  chrome.runtime.sendMessage({
+    type: 'SOL_RPC_UPDATED',
+    rpcUrl: solRpcUrl,
+    wssUrl: solWssUrl,
+  }).catch(() => {});
+  showToast('SOL RPC 已保存', 'success');
+}
+
+// ==================== SOL 钱包管理 ====================
+
+function renderSolWalletList(activeIds = []) {
+  const list = $('solWalletList');
+  if (solWallets.length === 0) {
+    list.innerHTML = '<div style="color:#666;text-align:center;padding:20px;">暂无 SOL 钱包，请添加</div>';
+    return;
+  }
+
+  list.innerHTML = solWallets.map(w => `
+    <div class="wallet-item" data-id="${w.id}">
+      <div class="wallet-info">
+        <input type="checkbox" class="sol-wallet-checkbox" data-id="${w.id}"
+          ${activeIds.includes(w.id) ? 'checked' : ''}>
+        <div class="wallet-details">
+          <div class="wallet-name">${escapeHtml(w.name)}</div>
+          <div class="wallet-address">${escapeHtml(w.address)}</div>
+        </div>
+      </div>
+      <div class="wallet-actions">
+        <button class="btn-icon sol-btn-edit" data-id="${w.id}" title="编辑">✏️</button>
+        <button class="btn-icon sol-btn-delete" data-id="${w.id}" title="删除">🗑️</button>
+      </div>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('.sol-btn-delete').forEach(btn => {
+    btn.onclick = () => deleteSolWallet(btn.dataset.id);
+  });
+  list.querySelectorAll('.sol-btn-edit').forEach(btn => {
+    btn.onclick = () => editSolWallet(btn.dataset.id);
+  });
+  list.querySelectorAll('.sol-wallet-checkbox').forEach(cb => {
+    cb.onchange = () => saveSolActiveWallets();
+  });
+}
+
+function parseSolPrivateKey(keyStr) {
+  const decoded = bs58.decode(keyStr);
+  if (decoded.length === 64) return Keypair.fromSecretKey(decoded);
+  if (decoded.length === 32) return Keypair.fromSeed(decoded);
+  throw new Error(`invalid sol key length: ${decoded.length}`);
+}
+
+async function addSolWallet() {
+  if (!unlocked || !(await isUnlocked())) {
+    unlocked = false;
+    await initPasswordUI();
+    showToast('已锁定，请先解锁', 'error');
+    return;
+  }
+  const name = $('solWalletName').value.trim() || `SOL 钱包 ${solWallets.length + 1}`;
+  const privateKey = $('solPrivateKey').value.trim();
+
+  if (!privateKey) { showToast('请输入私钥', 'error'); return; }
+
+  try {
+    const keypair = parseSolPrivateKey(privateKey);
+    const address = keypair.publicKey.toBase58();
+
+    if (solWallets.some(w => w.address === address)) {
+      showToast('该 SOL 钱包已存在', 'error');
+      return;
+    }
+
+    const encrypted = await encryptPrivateKey(privateKey);
+    solWallets.push({ id: Date.now().toString(), name, address, encryptedKey: encrypted });
+    await chrome.storage.local.set({ solWallets });
+
+    $('solPrivateKey').value = '';
+    $('solWalletName').value = '';
+    $('solAddressPreview').textContent = '';
+
+    renderSolWalletList();
+    showToast('SOL 钱包已添加', 'success');
+  } catch (e) {
+    if ((e?.message || '').includes('未解锁')) {
+      unlocked = false;
+      await initPasswordUI();
+      showToast('已锁定，请先解锁', 'error');
+      return;
+    }
+    showToast('SOL 私钥格式错误（需 base58，且为 32/64 字节）', 'error');
+  }
+}
+
+async function batchAddSolWallets() {
+  if (!unlocked || !(await isUnlocked())) {
+    unlocked = false;
+    await initPasswordUI();
+    showToast('已锁定，请先解锁', 'error');
+    return;
+  }
+  const text = $('solBatchKeys').value.trim();
+  if (!text) { showToast('请输入私钥', 'error'); return; }
+
+  const lines = text.split(/[\n,]/).map(l => l.trim()).filter(l => l);
+  let added = 0, failed = 0;
+
+  for (const line of lines) {
+    const parts = line.split(':');
+    const privateKey = parts.length > 1 ? parts[1].trim() : parts[0];
+    const name = parts.length > 1 ? parts[0].trim() : null;
+
+    try {
+      const keypair = parseSolPrivateKey(privateKey);
+      const address = keypair.publicKey.toBase58();
+
+      if (solWallets.some(w => w.address === address)) { failed++; continue; }
+
+      const encrypted = await encryptPrivateKey(privateKey);
+      solWallets.push({
+        id: Date.now().toString() + Math.random().toString(36).slice(2),
+        name: name || `SOL 钱包 ${solWallets.length + 1}`,
+        address,
+        encryptedKey: encrypted,
+      });
+      added++;
+    } catch (e) {
+      if ((e?.message || '').includes('未解锁')) {
+        unlocked = false;
+        await initPasswordUI();
+        showToast('已锁定，请先解锁', 'error');
+        return;
+      }
+      failed++;
+    }
+  }
+
+  await chrome.storage.local.set({ solWallets });
+  $('solBatchKeys').value = '';
+  toggleSolBatchAdd(false);
+  renderSolWalletList();
+  showToast(`添加 ${added} 个，失败 ${failed} 个`, added > 0 ? 'success' : 'error');
+}
+
+async function editSolWallet(id) {
+  const wallet = solWallets.find(w => w.id === id);
+  if (!wallet) return;
+  const newName = prompt('钱包名称:', wallet.name);
+  if (newName === null) return;
+  wallet.name = newName.trim() || wallet.name;
+  await chrome.storage.local.set({ solWallets });
+  renderSolWalletList();
+  showToast('已更新', 'success');
+}
+
+async function deleteSolWallet(id) {
+  if (!confirm('确定删除该 SOL 钱包？')) return;
+  solWallets = solWallets.filter(w => w.id !== id);
+  await chrome.storage.local.set({ solWallets });
+  renderSolWalletList();
+  showToast('已删除', 'success');
+}
+
+async function clearAllSolWallets() {
+  if (!confirm('确定删除所有 SOL 钱包？此操作不可恢复！')) return;
+  solWallets = [];
+  await chrome.storage.local.set({ solWallets, solActiveWalletIds: [] });
+  renderSolWalletList();
+  showToast('已清空', 'success');
+}
+
+function toggleSolSelectAll() {
+  const checkboxes = document.querySelectorAll('.sol-wallet-checkbox');
+  const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+  checkboxes.forEach(cb => cb.checked = !allChecked);
+  saveSolActiveWallets();
+}
+
+async function saveSolActiveWallets() {
+  const activeIds = Array.from(document.querySelectorAll('.sol-wallet-checkbox:checked'))
+    .map(cb => cb.dataset.id);
+  await chrome.storage.local.set({ solActiveWalletIds: activeIds });
+}
+
+function toggleSolBatchAdd(show) {
+  $('solBatchPanel').style.display = show ? 'block' : 'none';
+  $('solAddPanel').style.display = show ? 'none' : 'block';
+}
+
+function updateSolAddressPreview(privateKey) {
+  const el = $('solAddressPreview');
+  try {
+    const key = privateKey.trim();
+    if (!key) { el.textContent = ''; return; }
+    const keypair = parseSolPrivateKey(key);
+    el.innerHTML = '✓ ' + keypair.publicKey.toBase58();
+    el.style.color = '#00d4aa';
+  } catch {
+    el.textContent = '私钥格式错误 (需 base58)';
+    el.style.color = '#ff6b6b';
+  }
+}
+
 // 保存小费设置
 async function saveTip() {
   const raw = $('tipRate').value.trim();
@@ -379,6 +627,16 @@ $('selectAllBtn').addEventListener('click', toggleSelectAll);
 $('clearAllBtn').addEventListener('click', clearAllWallets);
 $('saveRpcBtn').addEventListener('click', saveRpc);
 $('saveTipBtn').addEventListener('click', saveTip);
+
+// SOL 事件绑定
+$('solPrivateKey').addEventListener('input', e => updateSolAddressPreview(e.target.value));
+$('solAddWalletBtn').addEventListener('click', addSolWallet);
+$('solBatchAddBtn').addEventListener('click', () => toggleSolBatchAdd(true));
+$('solCancelBatchBtn').addEventListener('click', () => toggleSolBatchAdd(false));
+$('solConfirmBatchBtn').addEventListener('click', batchAddSolWallets);
+$('solSelectAllBtn').addEventListener('click', toggleSolSelectAll);
+$('solClearAllBtn').addEventListener('click', clearAllSolWallets);
+$('saveSolRpcBtn').addEventListener('click', saveSolRpc);
 
 // 密码 & 锁定
 $('setPwBtn').addEventListener('click', handleSetPassword);

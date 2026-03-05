@@ -191,19 +191,38 @@ chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.url) {
-    const contractAddress = extractContractAddress(tab.url);
-    if (contractAddress) {
+    const detected = extractContractAddress(tab.url);
+    if (detected) {
       chrome.runtime.sendMessage({
         type: 'CONTRACT_DETECTED',
-        address: contractAddress,
+        address: detected.address,
+        chain: detected.chain,
         source: tab.url
       }).catch(() => {});
     }
   }
 });
 
+const SOL_ADDR = '[1-9A-HJ-NP-Za-km-z]{32,44}';
+
 function extractContractAddress(url) {
-  const patterns = [
+  // SOL patterns (check first — Solana addresses don't start with 0x)
+  const solPatterns = [
+    new RegExp(`pump\\.fun\\/coin\\/(${SOL_ADDR})`, 'i'),
+    new RegExp(`dexscreener\\.com\\/solana\\/(${SOL_ADDR})`, 'i'),
+    new RegExp(`birdeye\\.so\\/token\\/(${SOL_ADDR})`, 'i'),
+    new RegExp(`gmgn\\.ai\\/sol\\/token\\/(${SOL_ADDR})`, 'i'),
+    new RegExp(`solscan\\.io\\/token\\/(${SOL_ADDR})`, 'i'),
+    new RegExp(`photons?\\.club\\/[^/]*\\/token\\/(${SOL_ADDR})`, 'i'),
+  ];
+
+  for (const pattern of solPatterns) {
+    const match = url.match(pattern);
+    if (match) return { address: match[1], chain: 'sol' };
+  }
+
+  // BSC patterns
+  const bscPatterns = [
     /debot\.ai\/(address|token)\/[^/]*\/(?:\d+_)?(0x[a-fA-F0-9]{40})/i,
     /gmgn\.ai\/token\/[^/]*\/(0x[a-fA-F0-9]{40})/i,
     /dexscreener\.com\/[^/]*\/(0x[a-fA-F0-9]{40})/i,
@@ -217,11 +236,11 @@ function extractContractAddress(url) {
     /(0x[a-fA-F0-9]{40})/i
   ];
 
-  for (const pattern of patterns) {
+  for (const pattern of bscPatterns) {
     const match = url.match(pattern);
     if (match) {
       const addr = match[match.length - 1];
-      if (addr && addr.startsWith('0x')) return addr.toLowerCase();
+      if (addr && addr.startsWith('0x')) return { address: addr.toLowerCase(), chain: 'bsc' };
     }
   }
   return null;

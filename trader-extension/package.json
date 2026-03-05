@@ -1,13 +1,15 @@
 {
   "name": "freedom-trader",
-  "version": "1.0.0",
-  "description": "Freedom Trader - 免费 BSC 土狗交易终端",
+  "version": "2.0.0",
+  "description": "Freedom Trader - BSC + Solana 双链聚合交易终端",
   "private": true,
   "scripts": {
     "build": "node scripts/build.js",
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@solana/web3.js": "^1.98.4",
+    "bs58": "^6.0.0",
     "viem": "^2.23.2"
   },
   "devDependencies": {

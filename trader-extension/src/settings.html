@@ -1,69 +1,246 @@
 <!DOCTYPE html>
-<html>
+<html data-theme="light">
 <head>
   <meta charset="UTF-8">
   <title>Freedom Trader - 设置</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0d0d0d; min-height: 100vh; color: #fff; padding: 20px; }
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+    :root, [data-theme="light"] {
+      --bg: #f5f6f8;
+      --card: #ffffff;
+      --card-border: #e2e5ea;
+      --card-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03);
+      --surface: #f0f1f4;
+      --surface-hover: #e8eaed;
+      --text: #1a1d24;
+      --text2: #5c6370;
+      --text3: #9ca3af;
+      --accent: #0d9373;
+      --accent-bg: #e8f7f3;
+      --accent-border: #b0e0d5;
+      --accent-hover: #0b7d63;
+      --yellow: #c49000;
+      --yellow-bg: #fef9e7;
+      --yellow-border: #f0d68a;
+      --red: #d6324a;
+      --red-bg: #fdf0f2;
+      --red-border: #f0b0ba;
+      --purple: #7c3aed;
+      --purple-bg: #f3effe;
+      --divider: #eceef1;
+      --input-bg: #f8f9fa;
+      --input-border: #dcdfe4;
+      --input-focus: #0d9373;
+      --radius: 8px;
+      --radius-sm: 5px;
+      --font-mono: 'IBM Plex Mono', 'SF Mono', 'Consolas', monospace;
+      --font-ui: 'IBM Plex Sans', -apple-system, system-ui, sans-serif;
+    }
+    [data-theme="dark"] {
+      --bg: #0f1117;
+      --card: #1a1d2b;
+      --card-border: #2a2d3a;
+      --card-shadow: 0 1px 3px rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.15);
+      --surface: #22253a;
+      --surface-hover: #2a2d42;
+      --text: #e8eaed;
+      --text2: #8b92a5;
+      --text3: #505568;
+      --accent: #22d3a7;
+      --accent-bg: rgba(34,211,167,0.1);
+      --accent-border: rgba(34,211,167,0.25);
+      --accent-hover: #1fc49a;
+      --yellow: #f5b731;
+      --yellow-bg: rgba(245,183,49,0.1);
+      --yellow-border: rgba(245,183,49,0.25);
+      --red: #f4405f;
+      --red-bg: rgba(244,64,95,0.1);
+      --red-border: rgba(244,64,95,0.25);
+      --purple: #a78bfa;
+      --purple-bg: rgba(167,139,250,0.1);
+      --divider: #252838;
+      --input-bg: #1e2130;
+      --input-border: #2e3145;
+      --input-focus: #22d3a7;
+    }
+
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      font-family: var(--font-ui);
+      background: var(--bg);
+      min-height: 100vh;
+      color: var(--text);
+      padding: 20px;
+      -webkit-font-smoothing: antialiased;
+      transition: background .3s, color .3s;
+    }
+
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--card-border); border-radius: 4px; }
+
     .container { max-width: 600px; margin: 0 auto; }
-    .header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
-    .logo { font-size: 20px; font-weight: 800; background: linear-gradient(90deg, #00d4aa, #00ff88); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent; }
-    .card { background: #151515; border: 1px solid #252525; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
-    .card-title { font-size: 11px; color: #00d4aa; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; display: flex; justify-content: space-between; align-items: center; }
-    .card-title .actions { display: flex; gap: 8px; }
+
+    .header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .header-left { display: flex; align-items: center; gap: 10px; }
+    .logo {
+      font-family: var(--font-mono);
+      font-size: 16px; font-weight: 700;
+      color: var(--accent);
+    }
+    .theme-toggle {
+      background: var(--surface);
+      border: 1px solid var(--card-border);
+      color: var(--text2); cursor: pointer; font-size: 16px;
+      width: 32px; height: 32px; border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      transition: all .15s; line-height: 1;
+    }
+    .theme-toggle:hover { background: var(--surface-hover); color: var(--text); }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 14px;
+      box-shadow: var(--card-shadow);
+      transition: background .3s, border-color .3s;
+    }
+    .card-title {
+      font-size: 12px; font-weight: 700; color: var(--accent);
+      margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.8px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .card-title .actions { display: flex; gap: 6px; }
+
     .form-group { margin-bottom: 12px; }
-    label { display: block; font-size: 12px; color: #888; margin-bottom: 6px; }
-    input, textarea { width: 100%; padding: 10px; border: 1px solid #333; border-radius: 8px; background: #1a1a1a; color: #fff; font-size: 13px; font-family: monospace; }
-    input:focus, textarea:focus { outline: none; border-color: #00d4aa; }
+    label {
+      display: block; font-size: 12px; color: var(--text2);
+      margin-bottom: 6px; font-weight: 600;
+    }
+    input, textarea, select {
+      width: 100%; padding: 10px 12px;
+      border: 1px solid var(--input-border);
+      border-radius: var(--radius-sm);
+      background: var(--input-bg);
+      color: var(--text);
+      font-size: 13px;
+      font-family: var(--font-mono);
+      transition: border-color .15s, box-shadow .15s;
+    }
+    input:focus, textarea:focus, select:focus {
+      outline: none;
+      border-color: var(--input-focus);
+      box-shadow: 0 0 0 3px rgba(13,147,115,0.1);
+    }
     textarea { resize: vertical; min-height: 80px; }
     .input-row { display: flex; gap: 8px; }
     .input-row input { flex: 1; }
-    .btn { padding: 10px 16px; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
-    .btn-primary { background: linear-gradient(135deg, #00d4aa, #00ff88); color: #000; }
-    .btn-primary:hover { opacity: 0.9; }
-    .btn-secondary { background: #252525; color: #888; }
-    .btn-secondary:hover { background: #333; color: #fff; }
-    .btn-danger { background: rgba(255, 107, 107, 0.2); color: #ff6b6b; }
-    .btn-danger:hover { background: rgba(255, 107, 107, 0.3); }
-    .btn-small { padding: 6px 10px; font-size: 11px; }
-    .btn-icon { background: transparent; border: none; cursor: pointer; font-size: 14px; padding: 4px; }
-    .warning { background: rgba(255, 193, 7, 0.1); border: 1px solid rgba(255, 193, 7, 0.3); border-radius: 8px; padding: 10px; font-size: 12px; color: #ffc107; margin-bottom: 16px; }
-    .address-preview { font-family: monospace; font-size: 11px; color: #00d4aa; margin-top: 6px; }
-    .nav { margin-bottom: 20px; }
-    .nav a { color: #888; text-decoration: none; font-size: 13px; }
-    .nav a:hover { color: #00d4aa; }
-    .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 12px 24px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity 0.3s; z-index: 1000; }
-    .toast.show { opacity: 1; }
-    .toast.success { background: #00d4aa; color: #000; }
-    .toast.error { background: #ff6b6b; color: #fff; }
 
-    .wallet-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #1a1a1a; border-radius: 8px; margin-bottom: 8px; border: 1px solid #222; }
-    .wallet-item:hover { border-color: #333; }
+    .btn {
+      padding: 10px 16px; border: none; border-radius: var(--radius-sm);
+      font-size: 13px; font-weight: 700; cursor: pointer;
+      transition: all .15s;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary {
+      background: var(--accent); color: #fff;
+    }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-secondary {
+      background: var(--surface); color: var(--text2);
+      border: 1px solid var(--card-border);
+    }
+    .btn-secondary:hover { background: var(--surface-hover); color: var(--text); }
+    .btn-danger {
+      background: var(--red-bg); color: var(--red);
+      border: 1px solid var(--red-border);
+    }
+    .btn-danger:hover { background: var(--red); color: #fff; }
+    .btn-small { padding: 6px 12px; font-size: 11px; }
+    .btn-icon { background: transparent; border: none; cursor: pointer; font-size: 14px; padding: 4px; }
+
+    .warning {
+      background: var(--yellow-bg);
+      border: 1px solid var(--yellow-border);
+      border-radius: var(--radius);
+      padding: 12px 14px; font-size: 12px; font-weight: 600;
+      color: var(--yellow); margin-bottom: 14px;
+      line-height: 1.5;
+    }
+
+    .address-preview {
+      font-family: var(--font-mono);
+      font-size: 11px; color: var(--accent); margin-top: 6px; font-weight: 600;
+    }
+
+    .nav { margin-bottom: 16px; }
+    .nav a {
+      color: var(--accent); text-decoration: none;
+      font-size: 13px; font-weight: 600;
+      transition: opacity .15s;
+    }
+    .nav a:hover { opacity: 0.7; }
+
+    .toast {
+      position: fixed; bottom: 20px; left: 50%;
+      transform: translateX(-50%);
+      padding: 10px 24px; border-radius: var(--radius);
+      font-size: 13px; font-weight: 700;
+      opacity: 0; transition: opacity 0.3s; z-index: 1000;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    }
+    .toast.show { opacity: 1; }
+    .toast.success { background: var(--accent); color: #fff; }
+    .toast.error { background: var(--red); color: #fff; }
+
+    .wallet-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 12px;
+      background: var(--surface);
+      border-radius: var(--radius-sm);
+      margin-bottom: 6px;
+      border: 1px solid var(--card-border);
+      transition: border-color .15s;
+    }
+    .wallet-item:hover { border-color: var(--accent-border); }
     .wallet-info { display: flex; align-items: center; gap: 10px; flex: 1; }
-    .wallet-checkbox { width: 18px; height: 18px; cursor: pointer; accent-color: #00d4aa; }
+    .wallet-checkbox { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); }
     .wallet-details { flex: 1; }
-    .wallet-name { font-size: 13px; font-weight: 600; color: #fff; }
-    .wallet-address { font-size: 10px; color: #666; font-family: monospace; margin-top: 2px; }
+    .wallet-name { font-size: 13px; font-weight: 700; color: var(--text); }
+    .wallet-address {
+      font-size: 10px; color: var(--text2);
+      font-family: var(--font-mono); margin-top: 2px;
+    }
     .wallet-actions { display: flex; gap: 4px; }
     .wallet-list { max-height: 300px; overflow-y: auto; }
-    .wallet-list::-webkit-scrollbar { width: 4px; }
-    .wallet-list::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
 
     .batch-panel { display: none; }
     .add-panel { display: block; }
-    .info-row { display: flex; justify-content: space-between; font-size: 12px; padding: 8px 0; border-bottom: 1px solid #222; }
+    .info-row {
+      display: flex; justify-content: space-between;
+      font-size: 12px; padding: 8px 0;
+      border-bottom: 1px solid var(--divider);
+    }
     .info-row:last-child { border-bottom: none; }
-    .info-label { color: #666; }
-    .info-value { color: #00d4aa; font-family: monospace; }
+    .info-label { color: var(--text2); font-weight: 500; }
+    .info-value { color: var(--accent); font-family: var(--font-mono); font-weight: 600; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="nav"><a href="trader.html">← 返回交易</a></div>
     <div class="header">
-      <img src="../icon48.png" alt="FT" style="width:28px; height:28px; border-radius:4px;">
-      <span class="logo">Freedom Trader</span>
+      <div class="header-left">
+        <img src="../icon48.png" alt="FT" style="width:28px; height:28px; border-radius:5px;">
+        <span class="logo">Freedom Trader</span>
+      </div>
+      <button type="button" id="themeToggle" class="theme-toggle" title="切换主题">☀</button>
     </div>
 
     <div class="warning">🔒 私钥使用密码加密存储，密码不保存在任何地方。完全免费，小费自愿。</div>
@@ -72,7 +249,7 @@
     <div class="card">
       <div class="card-title">🔑 安全密码</div>
       <div id="pwSetup" style="display:none;">
-        <div style="font-size:12px;color:#888;margin-bottom:10px;">首次使用，请设置密码。密码用于加密私钥，忘记则需重新导入。</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">首次使用，请设置密码。密码用于加密私钥，忘记则需重新导入。</div>
         <div class="form-group"><input id="newPw" type="password" placeholder="设置密码（至少6位）"></div>
         <div class="form-group"><input id="confirmPw" type="password" placeholder="确认密码"></div>
         <button id="setPwBtn" class="btn btn-primary">设置密码</button>
@@ -82,10 +259,10 @@
         <button id="unlockBtn" class="btn btn-primary">解锁</button>
       </div>
       <div id="pwManage" style="display:none;">
-        <div style="font-size:12px;color:#00d4aa;margin-bottom:10px;">✓ 已解锁</div>
+        <div style="font-size:12px;color:var(--accent);margin-bottom:10px;font-weight:600;">✓ 已解锁</div>
         <div class="form-group">
           <label>自动锁定时间</label>
-          <select id="lockDuration" style="width:100%;padding:8px;border:1px solid #333;border-radius:8px;background:#1a1a1a;color:#fff;font-size:13px;">
+          <select id="lockDuration">
             <option value="5">5 分钟</option>
             <option value="15">15 分钟</option>
             <option value="30" selected>30 分钟</option>
@@ -111,24 +288,22 @@
       </div>
     </div>
 
-    <!-- 钱包管理 -->
+    <!-- BSC 钱包管理 -->
     <div class="card">
       <div class="card-title">
-        <span>🔐 钱包管理</span>
+        <span>🔐 BSC 钱包管理</span>
         <div class="actions">
           <button id="selectAllBtn" class="btn btn-small btn-secondary">全选</button>
           <button id="clearAllBtn" class="btn btn-small btn-danger">清空</button>
         </div>
       </div>
 
-      <!-- 钱包列表 -->
       <div id="walletList" class="wallet-list"></div>
 
-      <!-- 添加钱包 -->
-      <div id="addPanel" class="add-panel" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #222;">
+      <div id="addPanel" class="add-panel" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--divider);">
         <div class="input-row">
           <input id="walletName" type="text" placeholder="钱包名称 (可选)" style="flex: 0 0 120px;">
-          <input id="privateKey" type="password" placeholder="私钥">
+          <input id="privateKey" type="password" placeholder="私钥 (0x...)">
         </div>
         <div id="addressPreview" class="address-preview"></div>
         <div style="display: flex; gap: 8px; margin-top: 10px;">
@@ -137,8 +312,7 @@
         </div>
       </div>
 
-      <!-- 批量添加 -->
-      <div id="batchPanel" class="batch-panel" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #222;">
+      <div id="batchPanel" class="batch-panel" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--divider);">
         <label>批量添加私钥 (每行一个，支持 "名称:私钥" 格式)</label>
         <textarea id="batchKeys" placeholder="私钥1&#10;钱包2:0x...&#10;私钥3" style="min-height: 120px;"></textarea>
         <div style="display: flex; gap: 8px; margin-top: 10px;">
@@ -148,31 +322,81 @@
       </div>
     </div>
 
+    <!-- SOL 钱包管理 -->
     <div class="card">
-      <div class="card-title">🌐 RPC 配置</div>
-      <div style="font-size: 12px; color: #888; margin-bottom: 10px;">留空则使用默认节点：bsc-dataseed.bnbchain.org</div>
+      <div class="card-title">
+        <span>🟣 SOL 钱包管理</span>
+        <div class="actions">
+          <button id="solSelectAllBtn" class="btn btn-small btn-secondary">全选</button>
+          <button id="solClearAllBtn" class="btn btn-small btn-danger">清空</button>
+        </div>
+      </div>
+
+      <div id="solWalletList" class="wallet-list"></div>
+
+      <div id="solAddPanel" class="add-panel" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--divider);">
+        <div class="input-row">
+          <input id="solWalletName" type="text" placeholder="钱包名称 (可选)" style="flex: 0 0 120px;">
+          <input id="solPrivateKey" type="password" placeholder="私钥 (base58)">
+        </div>
+        <div id="solAddressPreview" class="address-preview"></div>
+        <div style="display: flex; gap: 8px; margin-top: 10px;">
+          <button id="solAddWalletBtn" class="btn btn-primary">添加钱包</button>
+          <button id="solBatchAddBtn" class="btn btn-secondary">批量添加</button>
+        </div>
+      </div>
+
+      <div id="solBatchPanel" class="batch-panel" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--divider);">
+        <label>批量添加 SOL 私钥 (每行一个，支持 "名称:私钥" 格式，base58)</label>
+        <textarea id="solBatchKeys" placeholder="base58私钥1&#10;钱包2:base58私钥&#10;base58私钥3" style="min-height: 120px;"></textarea>
+        <div style="display: flex; gap: 8px; margin-top: 10px;">
+          <button id="solConfirmBatchBtn" class="btn btn-primary">确认添加</button>
+          <button id="solCancelBatchBtn" class="btn btn-secondary">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🌐 BSC RPC 配置</div>
+      <div style="font-size: 12px; color: var(--text2); margin-bottom: 10px;">留空则使用默认节点：bsc-dataseed.bnbchain.org</div>
       <div class="form-group">
         <input id="rpcUrl" type="text" placeholder="留空使用默认 RPC">
       </div>
       <button id="saveRpcBtn" class="btn btn-primary btn-small">保存 RPC</button>
     </div>
 
-    <!-- 小费设置（0-1%，收款地址固定） -->
     <div class="card">
-      <div class="card-title">💝 支持开发者（可选）</div>
-      <div style="font-size: 12px; color: #888; margin-bottom: 12px; line-height: 1.6;">
-        FT 完全免费！如果你觉得好用，可以设置一点小费支持后续开发。<br>
-        设为 <b style="color:#00d4aa">0</b> = 完全免费，设为 <b style="color:#00d4aa">0.1</b> = 0.1% 小费
+      <div class="card-title">🌐 SOL RPC 配置</div>
+      <div style="font-size: 12px; color: var(--text2); margin-bottom: 10px;">留空则使用默认节点：api.mainnet-beta.solana.com</div>
+      <div class="form-group">
+        <label>HTTP RPC</label>
+        <input id="solRpcUrl" type="text" placeholder="留空使用默认 RPC">
       </div>
       <div class="form-group">
-        <label class="info-label">小费比例（0–1%）</label>
-        <input id="tipRate" type="number" min="0" max="5" step="0.01" placeholder="0" style="width:100%;padding:8px;">
+        <label>WSS RPC <span style="color:var(--text3);font-weight:400;">(可选，用于加速交易确认和 blockhash 预取)</span></label>
+        <input id="solWssUrl" type="text" placeholder="wss://... 留空则自动从 HTTP 推导">
+      </div>
+      <div id="wssStatus" style="font-size:11px;margin-bottom:8px;display:none;"></div>
+      <button id="saveSolRpcBtn" class="btn btn-primary btn-small">保存 SOL RPC</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">💝 支持开发者（可选）</div>
+      <div style="font-size: 12px; color: var(--text2); margin-bottom: 12px; line-height: 1.6;">
+        FT 完全免费！如果你觉得好用，可以设置一点小费支持后续开发。<br>
+        设为 <b style="color:var(--accent)">0</b> = 完全免费，设为 <b style="color:var(--accent)">0.1</b> = 0.1% 小费
+      </div>
+      <div class="form-group">
+        <label>小费比例（0–1%）</label>
+        <input id="tipRate" type="number" min="0" max="5" step="0.01" placeholder="0">
       </div>
       <button id="saveTipBtn" class="btn btn-primary btn-small">保存小费设置</button>
     </div>
   </div>
 
   <div id="toast" class="toast"></div>
+
+  <script src="theme.js"></script>
   <script src="settings.js"></script>
 </body>
 </html>
