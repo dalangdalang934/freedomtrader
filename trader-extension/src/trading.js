@@ -1,5 +1,5 @@
 import { parseUnits } from 'viem';
-import { FREEDOM_ROUTER, ROUTER_ABI, ERC20_ABI, TOKEN_MANAGER_V2, HELPER3, ZERO_ADDR, DEFAULT_TIP_RATE } from './constants.js';
+import { FREEDOM_ROUTER, ROUTER_ABI, ERC20_ABI, HELPER3_ABI, TOKEN_MANAGER_V2, HELPER3, ZERO_ADDR, DEFAULT_TIP_RATE } from './constants.js';
 import { state } from './state.js';
 import { $ } from './utils.js';
 
@@ -40,7 +40,8 @@ export function calcAmountOutMin(amountIn, reserveIn, reserveOut, decimalsOut, s
     console.warn('[滑点] 储备为零，跳过本地滑点保护，由合约处理');
     return 0n;
   }
-  const amountOut = (amountIn * reserveOut) / (reserveIn + amountIn);
+  let amountOut = (amountIn * reserveOut) / (reserveIn + amountIn);
+  if (amountOut > reserveOut) amountOut = reserveOut;
   const slipBps = BigInt(Math.floor((100 - slippage) * 100));
   return (amountOut * slipBps) / 10000n;
 }
@@ -54,10 +55,25 @@ export async function buy(walletId, tokenAddr, amountStr, gasPrice) {
   const deadline = BigInt(Math.floor(Date.now() / 1000) + 120);
   const tipRate = getTipRate();
   const slippage = parseFloat($('slippage')?.value) || 15;
-  const amountOutMin = calcAmountOutMin(amt, state.lpInfo.reserveBNB, state.lpInfo.reserveToken, state.tokenInfo.decimals, slippage);
+  const slipBps = BigInt(Math.floor((100 - slippage) * 100));
+  let amountOutMin;
+  if (state.lpInfo.isInternal && state.tokenInfo.address) {
+    try {
+      const result = await state.publicClient.readContract({
+        address: HELPER3, abi: HELPER3_ABI, functionName: 'tryBuy',
+        args: [tokenAddr, 0n, amt]
+      });
+      amountOutMin = (result[2] * slipBps) / 10000n;
+    } catch (e) {
+      console.warn('[BUY] tryBuy failed, using 0:', e.message);
+      amountOutMin = 0n;
+    }
+  } else {
+    amountOutMin = calcAmountOutMin(amt, state.lpInfo.reserveBNB, state.lpInfo.reserveToken, state.tokenInfo.decimals, slippage);
+  }
 
   const t0 = performance.now();
-  console.log('[BUY] token:', tokenAddr, 'amount:', amountStr, 'BNB, tipRate:', tipRate.toString());
+  console.log('[BUY] token:', tokenAddr, 'amount:', amountStr, 'BNB, tipRate:', tipRate.toString(), 'amountOutMin:', amountOutMin.toString());
 
   const txHash = await wc.client.writeContract({
     address: FREEDOM_ROUTER, abi: ROUTER_ABI, functionName: 'buy',
@@ -116,7 +132,23 @@ export async function sell(walletId, tokenAddr, amountStr, gasPrice) {
   const deadline = BigInt(Math.floor(Date.now() / 1000) + 120);
   const tipRate = getTipRate();
   const slippage = parseFloat($('slippage')?.value) || 15;
-  const amountOutMin = calcAmountOutMin(amt, state.lpInfo.reserveToken, state.lpInfo.reserveBNB, 18, slippage);
+  const slipBps = BigInt(Math.floor((100 - slippage) * 100));
+  let amountOutMin;
+  if (state.lpInfo.isInternal && state.tokenInfo.address) {
+    try {
+      const result = await state.publicClient.readContract({
+        address: HELPER3, abi: HELPER3_ABI, functionName: 'trySell',
+        args: [tokenAddr, amt]
+      });
+      const netFunds = result[2] - result[3];
+      amountOutMin = netFunds > 0n ? (netFunds * slipBps) / 10000n : 0n;
+    } catch (e) {
+      console.warn('[SELL] trySell failed, using 0:', e.message);
+      amountOutMin = 0n;
+    }
+  } else {
+    amountOutMin = calcAmountOutMin(amt, state.lpInfo.reserveToken, state.lpInfo.reserveBNB, 18, slippage);
+  }
 
   const balance = await state.publicClient.readContract({
     address: tokenAddr, abi: ERC20_ABI, functionName: 'balanceOf', args: [wc.account.address]

@@ -1,6 +1,6 @@
 {
   "name": "freedom-trader",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Freedom Trader - BSC + Solana 双链聚合交易终端",
   "private": true,
   "scripts": {

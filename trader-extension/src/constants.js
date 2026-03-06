@@ -7,6 +7,27 @@ export const HELPER3 = '0xF251F83e40a78868FcfA3FA4599Dad6494E46034';
 export const WBNB = '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c';
 export const ZERO_ADDR = '0x0000000000000000000000000000000000000000';
 
+export const HELPER3_ABI = [
+  {
+    name: 'tryBuy', type: 'function', stateMutability: 'view',
+    inputs: [{ name: 'token', type: 'address' }, { name: 'amount', type: 'uint256' }, { name: 'funds', type: 'uint256' }],
+    outputs: [
+      { name: 'tokenManager', type: 'address' }, { name: 'quote', type: 'address' },
+      { name: 'estimatedAmount', type: 'uint256' }, { name: 'estimatedCost', type: 'uint256' },
+      { name: 'estimatedFee', type: 'uint256' }, { name: 'amountMsgValue', type: 'uint256' },
+      { name: 'amountApproval', type: 'uint256' }, { name: 'amountFunds', type: 'uint256' }
+    ]
+  },
+  {
+    name: 'trySell', type: 'function', stateMutability: 'view',
+    inputs: [{ name: 'token', type: 'address' }, { name: 'amount', type: 'uint256' }],
+    outputs: [
+      { name: 'tokenManager', type: 'address' }, { name: 'quote', type: 'address' },
+      { name: 'funds', type: 'uint256' }, { name: 'fee', type: 'uint256' }
+    ]
+  },
+];
+
 export const ERC20_ABI = [
   { name: 'balanceOf', type: 'function', stateMutability: 'view', inputs: [{ name: 'account', type: 'address' }], outputs: [{ type: 'uint256' }] },
   { name: 'decimals', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint8' }] },

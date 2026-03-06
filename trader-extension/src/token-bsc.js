@@ -56,6 +56,7 @@ export async function detectBscToken(addr) {
       tmFunds: info.tmFunds,
       tmMaxFunds: info.tmMaxFunds,
       tmOffers: info.tmOffers,
+      tmTradingFeeRate: info.tmTradingFeeRate,
       pair: info.pair,
       isTaxToken: info.isTaxToken,
       taxFeeRate: info.taxFeeRate,

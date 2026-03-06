@@ -1,6 +1,7 @@
 import { formatUnits, parseUnits } from 'viem';
 import { state } from './state.js';
 import { $, formatNum } from './utils.js';
+import { HELPER3, HELPER3_ABI } from './constants.js';
 import { LAMPORTS_PER_SOL } from './sol/constants.js';
 
 function isSol() { return state.currentChain === 'sol'; }
@@ -23,7 +24,13 @@ export function updateSlippageBtn(val) {
   $('warningBox').classList.toggle('show', parseFloat(val) >= 25);
 }
 
+let _priceTimer = null;
 export function updatePrice() {
+  clearTimeout(_priceTimer);
+  _priceTimer = setTimeout(_updatePriceImpl, 150);
+}
+
+async function _updatePriceImpl() {
   const div = $('priceInfo');
   const amount = parseFloat($('amount').value) || 0;
   if (!div || !state.lpInfo.hasLP || amount <= 0) { if (div) div.style.display = 'none'; return; }
@@ -40,24 +47,61 @@ export function updatePrice() {
   const ns = nativeSymbol();
 
   try {
+    if (!sol && state.lpInfo.isInternal && state.tokenInfo.address && state.publicClient) {
+      await _updateInternalPrice(div, amountPerWallet, walletCount, slip);
+      return;
+    }
+
     const quoteReserve = state.lpInfo.reserveBNB;
     const tokenReserve = state.lpInfo.reserveToken;
 
     if (state.tradeMode === 'buy') {
       const amt = parseUnits(amountPerWallet.toString(), nativeDec);
-      const est = quoteReserve > 0n ? (amt * tokenReserve) / quoteReserve : 0n;
+      let est = quoteReserve > 0n ? (amt * tokenReserve) / (quoteReserve + amt) : 0n;
+      if (est > tokenReserve) est = tokenReserve;
       const min = (est * BigInt(Math.floor((100 - slip) * 100))) / 10000n;
       $('estimatedPrice').textContent = `≈ ${formatNum(est, state.tokenInfo.decimals)} ${state.tokenInfo.symbol} × ${walletCount}`;
       $('minOutput').textContent = `≥ ${formatNum(min * BigInt(walletCount), state.tokenInfo.decimals)} ${state.tokenInfo.symbol}`;
     } else {
       const amt = parseUnits(amountPerWallet.toString(), state.tokenInfo.decimals);
-      const est = tokenReserve > 0n ? (amt * quoteReserve) / tokenReserve : 0n;
+      let est = tokenReserve > 0n ? (amt * quoteReserve) / (tokenReserve + amt) : 0n;
+      if (est > quoteReserve) est = quoteReserve;
       const min = (est * BigInt(Math.floor((100 - slip) * 100))) / 10000n;
       $('estimatedPrice').textContent = `≈ ${formatNum(est, nativeDec)} ${ns} × ${walletCount}`;
       $('minOutput').textContent = `≥ ${formatNum(min * BigInt(walletCount), nativeDec)} ${ns}`;
     }
     div.style.display = 'block';
   } catch (e) { div.style.display = 'none'; }
+}
+
+async function _updateInternalPrice(div, amountPerWallet, walletCount, slip) {
+  const token = state.tokenInfo.address;
+  const dec = state.tokenInfo.decimals;
+  try {
+    if (state.tradeMode === 'buy') {
+      const funds = parseUnits(amountPerWallet.toString(), 18);
+      const result = await state.publicClient.readContract({
+        address: HELPER3, abi: HELPER3_ABI, functionName: 'tryBuy', args: [token, 0n, funds]
+      });
+      const est = result[2];
+      const min = (est * BigInt(Math.floor((100 - slip) * 100))) / 10000n;
+      $('estimatedPrice').textContent = `≈ ${formatNum(est, dec)} ${state.tokenInfo.symbol} × ${walletCount}`;
+      $('minOutput').textContent = `≥ ${formatNum(min * BigInt(walletCount), dec)} ${state.tokenInfo.symbol}`;
+    } else {
+      const amt = parseUnits(amountPerWallet.toString(), dec);
+      const result = await state.publicClient.readContract({
+        address: HELPER3, abi: HELPER3_ABI, functionName: 'trySell', args: [token, amt]
+      });
+      const est = result[2] - result[3];
+      const min = (est * BigInt(Math.floor((100 - slip) * 100))) / 10000n;
+      $('estimatedPrice').textContent = `≈ ${formatNum(est > 0n ? est : 0n, 18)} BNB × ${walletCount}`;
+      $('minOutput').textContent = `≥ ${formatNum(min > 0n ? min * BigInt(walletCount) : 0n, 18)} BNB`;
+    }
+    div.style.display = 'block';
+  } catch (e) {
+    console.warn('[PRICE] tryBuy/trySell failed:', e.message);
+    div.style.display = 'none';
+  }
 }
 
 export function switchMode(mode) {
