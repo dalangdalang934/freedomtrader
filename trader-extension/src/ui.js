@@ -146,10 +146,11 @@ export function setPercentAmount(pct) {
 }
 
 export function renderAllQuickButtons() {
-  const quickBuy = (state.config.customQuickBuy || '0.01,0.05,0.1,0.5,1').split(',').map(s => s.trim()).filter(Boolean);
-  const slipVals = (state.config.customSlipValues || '5,10,15,25,49').split(',').map(s => s.trim()).filter(Boolean);
-  const fastBuyAmts = (state.config.customBuyAmounts || '0.01,0.05,0.1,0.5').split(',').map(s => s.trim()).filter(Boolean);
-  const fastSellPcts = (state.config.customSellPcts || '25,50,75,100').split(',').map(s => s.trim()).filter(Boolean);
+  const sol = isSol();
+  const quickBuy = ((sol ? state.config.solCustomQuickBuy : state.config.customQuickBuy) || (sol ? '0.1,0.25,0.5,1,2' : '0.01,0.05,0.1,0.5,1')).split(',').map(s => s.trim()).filter(Boolean);
+  const slipVals = ((sol ? state.config.solCustomSlipValues : state.config.customSlipValues) || '5,10,15,25,49').split(',').map(s => s.trim()).filter(Boolean);
+  const fastBuyAmts = ((sol ? state.config.solCustomBuyAmounts : state.config.customBuyAmounts) || (sol ? '0.1,0.25,0.5,1' : '0.01,0.05,0.1,0.5')).split(',').map(s => s.trim()).filter(Boolean);
+  const fastSellPcts = ((sol ? state.config.solCustomSellPcts : state.config.customSellPcts) || '25,50,75,100').split(',').map(s => s.trim()).filter(Boolean);
 
   const buyQuickRow = $('buyQuickRow');
   if (buyQuickRow) {
@@ -190,10 +191,10 @@ export function toggleQuickEdit(show) {
     const defaults = sol
       ? { qb: '0.1, 0.25, 0.5, 1, 2', ba: '0.1, 0.25, 0.5, 1' }
       : { qb: '0.01, 0.05, 0.1, 0.5, 1', ba: '0.01, 0.05, 0.1, 0.5' };
-    $('customQuickBuy').value = state.config.customQuickBuy || defaults.qb;
-    $('customSlipValues').value = state.config.customSlipValues || '5, 10, 15, 25, 49';
-    $('customBuyAmounts').value = state.config.customBuyAmounts || defaults.ba;
-    $('customSellPcts').value = state.config.customSellPcts || '25, 50, 75, 100';
+    $('customQuickBuy').value = (sol ? state.config.solCustomQuickBuy : state.config.customQuickBuy) || defaults.qb;
+    $('customSlipValues').value = (sol ? state.config.solCustomSlipValues : state.config.customSlipValues) || '5, 10, 15, 25, 49';
+    $('customBuyAmounts').value = (sol ? state.config.solCustomBuyAmounts : state.config.customBuyAmounts) || defaults.ba;
+    $('customSellPcts').value = (sol ? state.config.solCustomSellPcts : state.config.customSellPcts) || '25, 50, 75, 100';
   }
 }
 
@@ -202,11 +203,20 @@ export function saveQuickConfig() {
   const slipVals = $('customSlipValues').value.trim();
   const fastBuyVal = $('customBuyAmounts').value.trim();
   const fastSellVal = $('customSellPcts').value.trim();
-  if (quickBuy) state.config.customQuickBuy = quickBuy;
-  if (slipVals) state.config.customSlipValues = slipVals;
-  if (fastBuyVal) state.config.customBuyAmounts = fastBuyVal;
-  if (fastSellVal) state.config.customSellPcts = fastSellVal;
-  chrome.storage.local.set({ customQuickBuy: quickBuy, customSlipValues: slipVals, customBuyAmounts: fastBuyVal, customSellPcts: fastSellVal });
+  const sol = isSol();
+  if (sol) {
+    if (quickBuy) state.config.solCustomQuickBuy = quickBuy;
+    if (slipVals) state.config.solCustomSlipValues = slipVals;
+    if (fastBuyVal) state.config.solCustomBuyAmounts = fastBuyVal;
+    if (fastSellVal) state.config.solCustomSellPcts = fastSellVal;
+    chrome.storage.local.set({ solCustomQuickBuy: quickBuy, solCustomSlipValues: slipVals, solCustomBuyAmounts: fastBuyVal, solCustomSellPcts: fastSellVal });
+  } else {
+    if (quickBuy) state.config.customQuickBuy = quickBuy;
+    if (slipVals) state.config.customSlipValues = slipVals;
+    if (fastBuyVal) state.config.customBuyAmounts = fastBuyVal;
+    if (fastSellVal) state.config.customSellPcts = fastSellVal;
+    chrome.storage.local.set({ customQuickBuy: quickBuy, customSlipValues: slipVals, customBuyAmounts: fastBuyVal, customSellPcts: fastSellVal });
+  }
   renderAllQuickButtons();
   toggleQuickEdit(false);
   showToast('快捷按钮已更新', 'success');

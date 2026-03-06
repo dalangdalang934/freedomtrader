@@ -78,6 +78,10 @@ function restoreChainConfig(config) {
     if (config.slippage) { $('slippage').value = config.slippage; updateSlippageBtn(config.slippage); }
     if (config.gasPrice) { $('gasPriceInput').value = config.gasPrice; }
     if (config.buyAmount) { $('amount').value = config.buyAmount; }
+    state.config.customQuickBuy = config.customQuickBuy;
+    state.config.customSlipValues = config.customSlipValues;
+    state.config.customBuyAmounts = config.customBuyAmounts;
+    state.config.customSellPcts = config.customSellPcts;
   } else {
     const slip = config.solSlippage || '15';
     const feeLamports = config.solPriorityFee ?? 100000;
@@ -92,6 +96,10 @@ function restoreChainConfig(config) {
 
     state.solConfig.priorityFee = Number(feeLamports);
     state.solConfig.jitoTip = Number(jitoLamports);
+    state.config.solCustomQuickBuy = config.solCustomQuickBuy;
+    state.config.solCustomSlipValues = config.solCustomSlipValues;
+    state.config.solCustomBuyAmounts = config.solCustomBuyAmounts;
+    state.config.solCustomSellPcts = config.solCustomSellPcts;
   }
 }
 
