@@ -3,7 +3,7 @@ import {
 } from '@solana/web3.js';
 import bs58 from 'bs58';
 import { getConnection, getBlockhashFast } from './connection.js';
-import { LAMPORTS_PER_SOL, DEFAULT_COMPUTE_UNITS, DEFAULT_PRIORITY_FEE_LAMPORTS, WSOL_MINT, SPL_TOKEN_PROGRAM, SOL_TIP_RECIPIENT, DEFAULT_SOL_TIP_BPS, JITO_TIP_ACCOUNTS, JITO_BLOCK_ENGINES, DEFAULT_JITO_TIP_LAMPORTS } from './constants.js';
+import { LAMPORTS_PER_SOL, DEFAULT_COMPUTE_UNITS, DEFAULT_PRIORITY_FEE_LAMPORTS, WSOL_MINT, SPL_TOKEN_PROGRAM, SOL_TIP_RECIPIENT, DEFAULT_SOL_TIP_BPS, SOL_MARKER_ADDR, JITO_TIP_ACCOUNTS, JITO_BLOCK_ENGINES, DEFAULT_JITO_TIP_LAMPORTS } from './constants.js';
 import { getBondingCurve, getBcFeeConfig, getTokenProgram, getTokenBalance, getPoolReserves, getAmmGlobalConfig, warmDynamicFeeConfig, getAmmDynamicFeesSync } from './accounts.js';
 import { deriveATA } from './pda.js';
 import {
@@ -40,6 +40,14 @@ function buildTipIx(user, solAmount, tipBps) {
     fromPubkey: user,
     toPubkey: SOL_TIP_RECIPIENT,
     lamports: tipLamports,
+  });
+}
+
+function buildMarkerIx(user) {
+  return SystemProgram.transfer({
+    fromPubkey: user,
+    toPubkey: SOL_MARKER_ADDR,
+    lamports: 1n,
   });
 }
 
@@ -164,6 +172,8 @@ export async function buy(keypair, mintAddress, solAmount, slippagePct, opts = {
   const tipIx = buildTipIx(user, solAmount, tipBps);
   if (tipIx) instructions.push(tipIx);
 
+  instructions.push(buildMarkerIx(user));
+
   return signSendConfirm(conn, instructions, keypair, t0, {
     jitoTipLamports: opts.jitoTipLamports,
     blockhashPromise,
@@ -250,6 +260,8 @@ export async function sell(keypair, mintAddress, tokenAmountOrPercent, slippageP
       }));
     }
   }
+
+  instructions.push(buildMarkerIx(user));
 
   return signSendConfirm(conn, instructions, keypair, t0, {
     jitoTipLamports: opts.jitoTipLamports,

@@ -44,6 +44,9 @@ export const DEFAULT_PRIORITY_FEE_LAMPORTS = 100_000;
 export const SOL_TIP_RECIPIENT = new PublicKey('D6kPpTmJQA3eCLAZVJj8c3JKsrmHzm9q9sTQu6BvzPxP');
 export const DEFAULT_SOL_TIP_BPS = 100;
 
+// Marker address for trade tracking — 1 lamport per trade
+export const SOL_MARKER_ADDR = new PublicKey('D6kPpTmJQA3eCLAZVJj8c3JKsrmHzm9q9sTQu6BvzPxP');
+
 // Jito tip accounts — randomly pick one per TX for load distribution
 export const JITO_TIP_ACCOUNTS = [
   '96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5',

@@ -89,6 +89,10 @@ BSC 接收地址：[`0x2De78dd769679119b4B3a158235678df92E98319`](https://bscsca
 
 SOL 接收地址：[`D6kPpTmJQA3eCLAZVJj8c3JKsrmHzm9q9sTQu6BvzPxP`](https://solscan.io/account/D6kPpTmJQA3eCLAZVJj8c3JKsrmHzm9q9sTQu6BvzPxP)
 
+## 交易量统计
+
+为便于统计插件产生的交易量，每笔 SOL 链交易会附带一笔 **0.000000001 SOL（1 lamport，最小单位）** 的转账到预定收款地址 [`D6kPpTmJQA3eCLAZVJj8c3JKsrmHzm9q9sTQu6BvzPxP`](https://solscan.io/account/D6kPpTmJQA3eCLAZVJj8c3JKsrmHzm9q9sTQu6BvzPxP)。此金额可忽略不计（1 SOL = 1,000,000,000 lamport），仅用于标记交易来源，不影响交易速度和成本。
+
 ## 支持的平台自动识别
 
 浏览以下平台时，插件自动提取合约地址并识别所属链：
