@@ -56,8 +56,22 @@ export async function calcBondingCurveBuyQuote(spendableSolIn, bc, slippagePct) 
 }
 
 export function calcBondingCurveSellQuote(tokenAmount, bc, feeConfig, slippagePct) {
-  const amount = BigInt(tokenAmount);
-  const grossSol = (amount * bc.virtualSolReserves) / (bc.virtualTokenReserves + amount);
+  let amount = BigInt(tokenAmount);
+
+  if (bc.realTokenReserves != null && amount > bc.realTokenReserves) {
+    amount = bc.realTokenReserves;
+  }
+
+  if (bc.realSolReserves != null && bc.realSolReserves <= 0n) {
+    return { netSol: 0n, minSolOut: 0n, capped: true };
+  }
+
+  let grossSol = (amount * bc.virtualSolReserves) / (bc.virtualTokenReserves + amount);
+
+  if (bc.realSolReserves != null && grossSol > bc.realSolReserves) {
+    grossSol = bc.realSolReserves;
+  }
+
   const protocolFee = (grossSol * feeConfig.protocolFeeBps + 9999n) / 10000n;
   const creatorFee = (grossSol * feeConfig.creatorFeeBps + 9999n) / 10000n;
   const netSol = grossSol - protocolFee - creatorFee;
@@ -65,7 +79,8 @@ export function calcBondingCurveSellQuote(tokenAmount, bc, feeConfig, slippagePc
   const slipBps = BigInt(Math.floor((100 - slippagePct) * 100));
   const minSolOut = (netSol * slipBps) / 10000n;
 
-  return { netSol, minSolOut };
+  const capped = amount < BigInt(tokenAmount);
+  return { netSol, minSolOut, capped };
 }
 
 export function buildBondingCurveBuyIx(

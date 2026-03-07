@@ -218,8 +218,20 @@ export async function sell(keypair, mintAddress, tokenAmountOrPercent, slippageP
   let guaranteedSolOut = 0n;
 
   if (!bc.complete) {
+    if (bc.realSolReserves != null && bc.realSolReserves <= 0n) {
+      throw new Error('池子 SOL 储备为 0，无法卖出');
+    }
+
+    if (bc.realTokenReserves != null && sellAmount > bc.realTokenReserves) {
+      console.log(`[BC-SELL] sellAmount ${sellAmount} > realTokenReserves ${bc.realTokenReserves}, capping`);
+      sellAmount = bc.realTokenReserves;
+    }
+
     const feeConfig = await getBcFeeConfig();
-    const { minSolOut, netSol } = calcBondingCurveSellQuote(sellAmount, bc, feeConfig, slippagePct);
+    const { minSolOut, netSol, capped } = calcBondingCurveSellQuote(sellAmount, bc, feeConfig, slippagePct);
+    if (capped) {
+      console.log(`[BC-SELL] Quote capped to pool limits`);
+    }
     console.log(`[BC-SELL] ${sellAmount} tokens → ~${netSol} lamports (min: ${minSolOut})`);
     guaranteedSolOut = minSolOut;
 
@@ -300,6 +312,7 @@ function formatTxError(err) {
   if (s.includes('"Custom":6004')) return '滑点超限 (Slippage)，请提高滑点';
   if (s.includes('"Custom":3007')) return '账户所属程序不匹配 (AccountOwnedByWrongProgram)';
   if (s.includes('"Custom":6000')) return '代币已毕业，请重新检测';
+  if (s.includes('"Custom":6024')) return '数学溢出 (Overflow)，池子流动性不足或价格剧烈波动';
   return `交易失败: ${s}`;
 }
 
