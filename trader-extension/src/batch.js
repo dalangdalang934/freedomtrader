@@ -1,6 +1,6 @@
 import { formatUnits, parseUnits } from 'viem';
 import { state } from './state.js';
-import { $ } from './utils.js';
+import { $, normalizeAmount } from './utils.js';
 import { showStatus, showToast } from './ui.js';
 import { buy, sell } from './trading.js';
 import { solBuy, solSell } from './sol-trading.js';
@@ -12,7 +12,7 @@ function quoteSymbol() { return isSol() ? 'SOL' : 'BNB'; }
 
 function getActiveWallets() {
   if (isSol()) {
-    return state.solActiveWalletIds.filter(id => state.solKeypairs.has(id));
+    return state.solActiveWalletIds.filter(id => state.solAddresses.has(id));
   }
   return state.activeWalletIds.filter(id => state.walletClients.has(id));
 }
@@ -31,17 +31,19 @@ function getPriorityFee() {
 
 function getJitoTip() {
   const solVal = parseFloat($('jitoTipInput')?.value);
-  return Math.floor((solVal > 0 ? solVal : 0.0001) * 1e9);
+  if (isNaN(solVal) || solVal < 0) return 0;
+  return Math.floor(solVal * 1e9);
 }
 
 function doBuy(id, tokenAddr, amountStr) {
+  const normalizedAmount = normalizeAmount(amountStr);
   if (isSol()) {
-    return solBuy(id, tokenAddr, parseFloat(amountStr), getSlippage(), {
+    return solBuy(id, tokenAddr, parseFloat(normalizedAmount), getSlippage(), {
       priorityFee: getPriorityFee(),
       jitoTip: getJitoTip(),
     });
   }
-  return buy(id, tokenAddr, amountStr, getPriorityFee());
+  return buy(id, tokenAddr, normalizedAmount, getPriorityFee());
 }
 
 function doSell(id, tokenAddr, amountStr) {
@@ -49,7 +51,8 @@ function doSell(id, tokenAddr, amountStr) {
     let solSellAmount = amountStr;
     if (!amountStr.endsWith('%')) {
       const dec = state.tokenInfo.decimals || 6;
-      solSellAmount = parseUnits(amountStr, dec).toString();
+      const normalizedAmount = normalizeAmount(amountStr);
+      solSellAmount = parseUnits(normalizedAmount, dec).toString();
     }
     return solSell(id, tokenAddr, solSellAmount, getSlippage(), {
       priorityFee: getPriorityFee(),
@@ -62,10 +65,12 @@ function doSell(id, tokenAddr, amountStr) {
 export async function executeBatchTrade() {
   const tokenAddr = $('tokenAddress').value.trim();
   const amountStr = $('amount').value;
+  const normalizedAmount = normalizeAmount(amountStr);
+  if (amountStr !== normalizedAmount) $('amount').value = normalizedAmount;
 
   if (!tokenAddr || !state.lpInfo.hasLP) { showStatus('请输入有效的代币地址', 'error'); return; }
-  const amount = parseFloat(amountStr);
-  if (!amountStr || amount <= 0) { showStatus('请输入数量', 'error'); return; }
+  const amount = parseFloat(normalizedAmount);
+  if (!normalizedAmount || amount <= 0) { showStatus('请输入数量', 'error'); return; }
 
   const activeWallets = getActiveWallets();
   if (activeWallets.length === 0) { showStatus('请选择至少一个钱包', 'error'); return; }
@@ -76,7 +81,7 @@ export async function executeBatchTrade() {
 
   try {
     const promises = activeWallets.map(id =>
-      state.tradeMode === 'buy' ? doBuy(id, tokenAddr, amountStr) : doSell(id, tokenAddr, amountStr)
+      state.tradeMode === 'buy' ? doBuy(id, tokenAddr, normalizedAmount) : doSell(id, tokenAddr, normalizedAmount)
     );
 
     const results = await Promise.allSettled(promises);
@@ -113,21 +118,23 @@ export async function executeBatchTrade() {
 }
 
 export async function fastBuy(amountStr) {
+  const normalizedAmount = normalizeAmount(amountStr);
   const tokenAddr = $('tokenAddress').value.trim();
   if (!tokenAddr || !state.lpInfo.hasLP) { showStatus('请先输入代币地址', 'error'); return; }
+  if (parseFloat(normalizedAmount) <= 0) { showStatus('请输入数量', 'error'); return; }
   const activeWallets = getActiveWallets();
   if (activeWallets.length === 0) { showStatus('请选择至少一个钱包', 'error'); return; }
 
   const unit = quoteSymbol();
   const batchT0 = performance.now();
-  showStatus(`⚡ 快速买入 ${amountStr} ${unit} × ${activeWallets.length}...`, 'pending');
+  showStatus(`⚡ 快速买入 ${normalizedAmount} ${unit} × ${activeWallets.length}...`, 'pending');
 
   try {
-    const results = await Promise.allSettled(activeWallets.map(id => doBuy(id, tokenAddr, amountStr)));
+    const results = await Promise.allSettled(activeWallets.map(id => doBuy(id, tokenAddr, normalizedAmount)));
     const elapsed = ((performance.now() - batchT0) / 1000).toFixed(2);
     const ok = results.filter(r => r.status === 'fulfilled').length;
     const fail = results.length - ok;
-    if (fail === 0) { showStatus(`✓ 买入成功 ${elapsed}s`, 'success'); showToast(`⚡ 买入 ${amountStr} ${unit} 成功`, 'success'); }
+    if (fail === 0) { showStatus(`✓ 买入成功 ${elapsed}s`, 'success'); showToast(`⚡ 买入 ${normalizedAmount} ${unit} 成功`, 'success'); }
     else if (ok > 0) { showStatus(`成功 ${ok} / 失败 ${fail}`, 'error'); }
     else { showStatus('买入全部失败', 'error'); showToast('❌ 买入失败', 'error'); }
     await loadBalances();

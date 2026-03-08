@@ -1,6 +1,6 @@
 import { state } from './state.js';
 import { getConnection } from './sol/connection.js';
-import { loadKeypair, detectToken, buy, sell } from './sol/trading.js';
+import { detectToken, buy, sell } from './sol/trading.js';
 
 function ensureConnection() {
   const conn = getConnection();
@@ -26,13 +26,13 @@ function getCachedDetectResult() {
 
 export async function solBuy(walletId, mintAddr, solAmount, slippage, opts = {}) {
   ensureConnection();
-  const keypair = state.solKeypairs.get(walletId);
-  if (!keypair) throw new Error('SOL 钱包未初始化');
+  const publicKey = state.solAddresses.get(walletId);
+  if (!publicKey) throw new Error('SOL 钱包未初始化');
 
   const priorityFee = opts.priorityFee ?? state.solConfig.priorityFee ?? 100000;
   const jitoTip = opts.jitoTip ?? state.solConfig.jitoTip ?? 100000;
 
-  const result = await buy(keypair, mintAddr, solAmount, slippage, {
+  const result = await buy(walletId, publicKey, mintAddr, solAmount, slippage, {
     priorityFeeLamports: priorityFee,
     computeUnits: 200000,
     tipBps: getSolTipBps(),
@@ -51,13 +51,13 @@ export async function solBuy(walletId, mintAddr, solAmount, slippage, opts = {})
 
 export async function solSell(walletId, mintAddr, amountOrPct, slippage, opts = {}) {
   ensureConnection();
-  const keypair = state.solKeypairs.get(walletId);
-  if (!keypair) throw new Error('SOL 钱包未初始化');
+  const publicKey = state.solAddresses.get(walletId);
+  if (!publicKey) throw new Error('SOL 钱包未初始化');
 
   const priorityFee = opts.priorityFee ?? state.solConfig.priorityFee ?? 100000;
   const jitoTip = opts.jitoTip ?? state.solConfig.jitoTip ?? 100000;
 
-  const result = await sell(keypair, mintAddr, amountOrPct, slippage, {
+  const result = await sell(walletId, publicKey, mintAddr, amountOrPct, slippage, {
     priorityFeeLamports: priorityFee,
     computeUnits: 200000,
     tipBps: getSolTipBps(),

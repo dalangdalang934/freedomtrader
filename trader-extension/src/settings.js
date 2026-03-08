@@ -3,9 +3,9 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { Keypair } from '@solana/web3.js';
 import bs58 from 'bs58';
 import {
-  encryptPrivateKey, decryptPrivateKey, isEncrypted,
+  encryptPrivateKey, isEncrypted,
   setPassword, unlock, lock, isUnlocked, hasPassword,
-  getLockDuration, setLockDuration, changePassword
+  getLockDuration, setLockDuration, resetAll
 } from './crypto.js';
 
 const $ = id => document.getElementById(id);
@@ -52,7 +52,6 @@ async function initPasswordUI() {
   $('pwSetup').style.display = 'none';
   $('pwUnlock').style.display = 'none';
   $('pwManage').style.display = 'none';
-  $('pwChange').style.display = 'none';
 
   if (!hasPw) {
     $('pwSetup').style.display = 'block';
@@ -113,33 +112,15 @@ async function handleSaveLockDuration() {
   showToast('锁定时间已保存', 'success');
 }
 
-function showChangePwPanel() {
-  $('pwManage').style.display = 'none';
-  $('pwChange').style.display = 'block';
-}
-
-function cancelChangePw() {
-  $('pwChange').style.display = 'none';
-  $('pwManage').style.display = 'block';
-  $('oldPw').value = '';
-  $('chNewPw').value = '';
-  $('chConfirmPw').value = '';
-}
-
-async function handleChangePassword() {
-  const oldPw = $('oldPw').value;
-  const newPw = $('chNewPw').value;
-  const confirmPw = $('chConfirmPw').value;
-  if (!oldPw) { showToast('请输入当前密码', 'error'); return; }
-  if (!newPw || newPw.length < 6) { showToast('新密码至少6位', 'error'); return; }
-  if (newPw !== confirmPw) { showToast('两次密码不一致', 'error'); return; }
-  try {
-    await changePassword(oldPw, newPw);
-    showToast('密码已修改', 'success');
-    cancelChangePw();
-  } catch (e) {
-    showToast('修改失败：' + e.message, 'error');
-  }
+async function handleResetAll() {
+  if (!confirm('⚠️ 确定要抹除所有数据吗？\n\n这将删除所有钱包、密码、RPC 配置等全部数据，无法恢复！\n\n请确保已备份好所有私钥。')) return;
+  if (!confirm('再次确认：所有数据将被永久删除，包括加密的私钥。是否继续？')) return;
+  await resetAll();
+  wallets = [];
+  solWallets = [];
+  unlocked = false;
+  showToast('所有数据已清除', 'success');
+  await loadConfig();
 }
 
 // 渲染钱包列表
@@ -643,9 +624,7 @@ $('setPwBtn').addEventListener('click', handleSetPassword);
 $('unlockBtn').addEventListener('click', handleUnlock);
 $('lockNowBtn').addEventListener('click', handleLock);
 $('saveLockBtn').addEventListener('click', handleSaveLockDuration);
-$('changePwBtn').addEventListener('click', showChangePwPanel);
-$('cancelChangePwBtn').addEventListener('click', cancelChangePw);
-$('confirmChangePwBtn').addEventListener('click', handleChangePassword);
+$('resetAllBtn').addEventListener('click', handleResetAll);
 
 // 密码输入框回车快捷键
 $('unlockPw').addEventListener('keydown', e => { if (e.key === 'Enter') handleUnlock(); });

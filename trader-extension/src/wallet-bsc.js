@@ -1,7 +1,6 @@
-import { createPublicClient, createWalletClient, http, formatUnits } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
+import { createPublicClient, http, formatUnits } from 'viem';
 import { bsc } from 'viem/chains';
-import { decryptPrivateKey, isEncrypted } from './crypto.js';
+import { initWallets } from './crypto.js';
 import { DEFAULT_RPC } from './constants.js';
 import { state } from './state.js';
 import { $, escapeHtml } from './utils.js';
@@ -11,19 +10,19 @@ export function createClient(rpcUrl) {
   state.publicClient = createPublicClient({ chain: bsc, transport: http(url) });
 }
 
+// Background holds WalletClients; frontend only keeps { address } per wallet
 export async function initWalletClients() {
   state.walletClients.clear();
   const rpcUrl = (state.config.rpcUrl || '').trim() || DEFAULT_RPC;
-  for (const wallet of state.wallets) {
-    try {
-      let key = wallet.encryptedKey;
-      if (isEncrypted(key)) { key = await decryptPrivateKey(key); if (!key) continue; }
-      key = key.startsWith('0x') ? key : '0x' + key;
-      const account = privateKeyToAccount(key);
-      const client = createWalletClient({ chain: bsc, transport: http(rpcUrl), account });
-      state.walletClients.set(wallet.id, { client, account });
-    } catch (e) { console.error('初始化钱包失败:', wallet.name, e); }
+  const result = await initWallets(rpcUrl);
+  if (result.error) { console.error('initWallets failed:', result.error); return; }
+
+  for (const [id, addr] of Object.entries(result.bsc || {})) {
+    state.walletClients.set(id, { address: addr });
   }
+  // SOL addresses are handled by wallet-sol.js via the same initWallets call;
+  // store them on a shared cache so wallet-sol doesn't need a second call
+  state._initWalletsResult = result;
 }
 
 export async function loadBscBalances() {
@@ -32,11 +31,11 @@ export async function loadBscBalances() {
     const balances = [];
     state.walletBalances.clear();
     const activeEntries = state.activeWalletIds.map(id => ({ id, wc: state.walletClients.get(id) })).filter(e => e.wc);
-    const bals = await Promise.all(activeEntries.map(e => state.publicClient.getBalance({ address: e.wc.account.address }).catch(() => 0n)));
+    const bals = await Promise.all(activeEntries.map(e => state.publicClient.getBalance({ address: e.wc.address }).catch(() => 0n)));
     activeEntries.forEach((e, i) => {
       state.walletBalances.set(e.id, bals[i]);
       totalBNB += bals[i];
-      balances.push({ name: state.wallets.find(w => w.id === e.id)?.name || e.id, balance: bals[i], address: e.wc.account.address });
+      balances.push({ name: state.wallets.find(w => w.id === e.id)?.name || e.id, balance: bals[i], address: e.wc.address });
     });
     $('bnbBalance').textContent = parseFloat(formatUnits(totalBNB, 18)).toFixed(4);
     $('walletCount').textContent = `${state.activeWalletIds.length}/${state.wallets.length}`;

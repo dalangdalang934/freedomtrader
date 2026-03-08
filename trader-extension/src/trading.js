@@ -1,13 +1,65 @@
 import { parseUnits } from 'viem';
-import { FREEDOM_ROUTER, ROUTER_ABI, ERC20_ABI, HELPER3_ABI, TOKEN_MANAGER_V2, HELPER3, ZERO_ADDR, DEFAULT_TIP_RATE } from './constants.js';
+import { FREEDOM_ROUTER, ROUTER_ABI, ERC20_ABI, HELPER3_ABI, TOKEN_MANAGER_V2, HELPER3, ZERO_ADDR, DEFAULT_TIP_RATE, ROUTE } from './constants.js';
+import { bscWriteContract } from './crypto.js';
 import { state } from './state.js';
-import { $ } from './utils.js';
+import { $, normalizeAmount } from './utils.js';
 
 const APPROVE_KEY = 'approvedTokens';
+const MAX_UINT256 = BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
+const MAX_HALF = BigInt('0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
+const approvalInFlight = new Map();
 
 function markApproved(key) {
   state.approvedTokens.add(key);
   chrome.storage.local.set({ [APPROVE_KEY]: [...state.approvedTokens] });
+}
+
+function makeApproveKey(owner, tokenAddr, spender) {
+  return `${owner}:${tokenAddr}:${spender}`.toLowerCase();
+}
+
+async function ensureApproved(walletId, ownerAddress, tokenAddr, spender, gasPrice, minAllowance, source) {
+  const approveKey = makeApproveKey(ownerAddress, tokenAddr, spender);
+  if (state.approvedTokens.has(approveKey)) {
+    console.log(`[${source}] 缓存命中，跳过 approve`);
+    return;
+  }
+
+  const pending = approvalInFlight.get(approveKey);
+  if (pending) {
+    console.log(`[${source}] 授权进行中，等待已有 approve`);
+    await pending;
+    return;
+  }
+
+  const run = (async () => {
+    const allowance = await state.publicClient.readContract({
+      address: tokenAddr, abi: ERC20_ABI, functionName: 'allowance',
+      args: [ownerAddress, spender]
+    });
+
+    if (allowance >= minAllowance) {
+      if (allowance >= MAX_HALF) markApproved(approveKey);
+      console.log(`[${source}] 已有足够授权，跳过 approve`);
+      return;
+    }
+
+    const res = await bscWriteContract(walletId, {
+      address: tokenAddr, abi: ERC20_ABI, functionName: 'approve',
+      args: [spender, MAX_UINT256],
+      gas: 150000n, gasPrice: parseUnits(gasPrice.toString(), 9)
+    });
+    console.log(`[${source}] 自动 approve 给`, spender, ':', res.txHash);
+    await state.publicClient.waitForTransactionReceipt({ hash: res.txHash, timeout: 120000 });
+    markApproved(approveKey);
+  })();
+
+  approvalInFlight.set(approveKey, run);
+  try {
+    await run;
+  } finally {
+    approvalInFlight.delete(approveKey);
+  }
 }
 
 export async function loadApprovedTokens() {
@@ -18,8 +70,11 @@ export async function loadApprovedTokens() {
 }
 
 export function getSellApproveTarget() {
+  if (state.lpInfo.approveTarget && state.lpInfo.approveTarget !== ZERO_ADDR) {
+    return state.lpInfo.approveTarget;
+  }
   if (state.lpInfo.isInternal) {
-    return (!state.lpInfo.tmQuote || state.lpInfo.tmQuote === ZERO_ADDR) ? TOKEN_MANAGER_V2 : HELPER3;
+    return TOKEN_MANAGER_V2;
   }
   return FREEDOM_ROUTER;
 }
@@ -45,39 +100,101 @@ export function calcAmountOutMin(amountIn, reserveIn, reserveOut, decimalsOut, s
   return (amountOut * slipBps) / 10000n;
 }
 
+function _isFourInternal() {
+  const r = state.lpInfo.routeSource;
+  return r === ROUTE.FOUR_INTERNAL_BNB || r === ROUTE.FOUR_INTERNAL_ERC20;
+}
+
+function _isFlapBonding() {
+  const r = state.lpInfo.routeSource;
+  return r === ROUTE.FLAP_BONDING || r === ROUTE.FLAP_BONDING_SELL;
+}
+
+function _isFlap() {
+  const r = state.lpInfo.routeSource;
+  return r === ROUTE.FLAP_BONDING || r === ROUTE.FLAP_BONDING_SELL || r === ROUTE.FLAP_DEX;
+}
+
+function _useRouterQuoteBuy() {
+  if (_isFourInternal()) return true;
+  return state.lpInfo.routeSource === ROUTE.FLAP_BONDING;
+}
+
+function _useRouterQuoteSell() {
+  if (_isFourInternal()) return true;
+  return _isFlapBonding();
+}
+
+async function _getQuoteBuy(tokenAddr, amt, slipBps) {
+  if (_useRouterQuoteBuy()) {
+    const estimated = await state.publicClient.readContract({
+      address: FREEDOM_ROUTER, abi: ROUTER_ABI, functionName: 'quoteBuy',
+      args: [tokenAddr, amt]
+    });
+    return (estimated * slipBps) / 10000n;
+  }
+  if (state.lpInfo.isInternal && state.tokenInfo.address) {
+    const result = await state.publicClient.readContract({
+      address: HELPER3, abi: HELPER3_ABI, functionName: 'tryBuy',
+      args: [tokenAddr, 0n, amt]
+    });
+    return (result[2] * slipBps) / 10000n;
+  }
+  const slippage = 10000n - slipBps > 0n ? Number(10000n - slipBps) / 100 : 15;
+  return calcAmountOutMin(amt, state.lpInfo.reserveBNB, state.lpInfo.reserveToken, state.tokenInfo.decimals, slippage);
+}
+
+async function _getQuoteSell(tokenAddr, amt, slipBps) {
+  if (_useRouterQuoteSell()) {
+    const estimated = await state.publicClient.readContract({
+      address: FREEDOM_ROUTER, abi: ROUTER_ABI, functionName: 'quoteSell',
+      args: [tokenAddr, amt]
+    });
+    if (estimated <= 0n) throw new Error('预估卖出收益为零');
+    return (estimated * slipBps) / 10000n;
+  }
+  if (state.lpInfo.isInternal && state.tokenInfo.address) {
+    const result = await state.publicClient.readContract({
+      address: HELPER3, abi: HELPER3_ABI, functionName: 'trySell',
+      args: [tokenAddr, amt]
+    });
+    const netFunds = result[2] - result[3];
+    if (netFunds <= 0n) throw new Error('预估卖出收益为零');
+    return (netFunds * slipBps) / 10000n;
+  }
+  const slippage = 10000n - slipBps > 0n ? Number(10000n - slipBps) / 100 : 15;
+  return calcAmountOutMin(amt, state.lpInfo.reserveToken, state.lpInfo.reserveBNB, 18, slippage);
+}
+
 export async function buy(walletId, tokenAddr, amountStr, gasPrice) {
   const wc = state.walletClients.get(walletId);
   if (!wc) throw new Error('钱包未初始化');
   await refreshTipConfig();
 
-  const amt = parseUnits(amountStr, 18);
-  const deadline = BigInt(Math.floor(Date.now() / 1000) + 120);
+  const normalizedAmount = normalizeAmount(amountStr);
+  const amt = parseUnits(normalizedAmount, 18);
+  if (amt <= 0n) throw new Error('数量太小');
   const tipRate = getTipRate();
   const slippage = parseFloat($('slippage')?.value) || 15;
   const slipBps = BigInt(Math.floor((100 - slippage) * 100));
+
   let amountOutMin;
-  if (state.lpInfo.isInternal && state.tokenInfo.address) {
-    try {
-      const result = await state.publicClient.readContract({
-        address: HELPER3, abi: HELPER3_ABI, functionName: 'tryBuy',
-        args: [tokenAddr, 0n, amt]
-      });
-      amountOutMin = (result[2] * slipBps) / 10000n;
-    } catch (e) {
-      throw new Error('无法预估买入数量: ' + e.message);
-    }
-  } else {
-    amountOutMin = calcAmountOutMin(amt, state.lpInfo.reserveBNB, state.lpInfo.reserveToken, state.tokenInfo.decimals, slippage);
+  try {
+    amountOutMin = await _getQuoteBuy(tokenAddr, amt, slipBps);
+  } catch (e) {
+    throw new Error('无法预估买入数量: ' + e.message);
   }
 
   const t0 = performance.now();
-  console.log('[BUY] token:', tokenAddr, 'amount:', amountStr, 'BNB, tipRate:', tipRate.toString(), 'amountOutMin:', amountOutMin.toString());
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 10);
+  console.log('[BUY] token:', tokenAddr, 'amount:', normalizedAmount, 'BNB, tipRate:', tipRate.toString(), 'amountOutMin:', amountOutMin.toString());
 
-  const txHash = await wc.client.writeContract({
+  const res = await bscWriteContract(walletId, {
     address: FREEDOM_ROUTER, abi: ROUTER_ABI, functionName: 'buy',
-    args: [tokenAddr, amountOutMin, deadline, tipRate],
+    args: [tokenAddr, amountOutMin, tipRate, deadline],
     value: amt, gas: 800000n, gasPrice: parseUnits(gasPrice.toString(), 9)
   });
+  const txHash = res.txHash;
 
   const tSent = performance.now();
   console.log(`[BUY] txHash: ${txHash} | 发送耗时: ${((tSent - t0) / 1000).toFixed(2)}s`);
@@ -89,29 +206,9 @@ export async function buy(walletId, tokenAddr, amountStr, gasPrice) {
   console.log(`[BUY] ✓ 确认 | 等待: ${((tConfirm - tSent) / 1000).toFixed(2)}s | 总计: ${((tConfirm - t0) / 1000).toFixed(2)}s`);
 
   const sellTarget = getSellApproveTarget();
-  const approveKey = `${wc.account.address}:${tokenAddr}:${sellTarget}`.toLowerCase();
-  if (!state.approvedTokens.has(approveKey)) {
-    try {
-      const allowance = await state.publicClient.readContract({
-        address: tokenAddr, abi: ERC20_ABI, functionName: 'allowance',
-        args: [wc.account.address, sellTarget]
-      });
-      const MAX_HALF = BigInt('0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
-      if (allowance >= MAX_HALF) {
-        console.log('[BUY] 已有足够授权，跳过 approve');
-      } else {
-        const approveTx = await wc.client.writeContract({
-          address: tokenAddr, abi: ERC20_ABI, functionName: 'approve',
-          args: [sellTarget, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')],
-          gas: 150000n, gasPrice: parseUnits(gasPrice.toString(), 9)
-        });
-        console.log('[BUY] 自动 approve 给', sellTarget, ':', approveTx);
-      }
-      markApproved(approveKey);
-    } catch (e) { console.warn('[BUY] 自动 approve 失败:', e.message); }
-  } else {
-    console.log('[BUY] 缓存命中，跳过 approve');
-  }
+  try {
+    await ensureApproved(walletId, wc.address, tokenAddr, sellTarget, gasPrice, MAX_HALF, 'BUY');
+  } catch (e) { console.warn('[BUY] 自动 approve 失败:', e.message); }
 
   return { txHash, sendMs: tSent - t0, confirmMs: tConfirm - tSent, totalMs: tConfirm - t0 };
 }
@@ -121,65 +218,42 @@ export async function sell(walletId, tokenAddr, amountStr, gasPrice) {
   if (!wc) throw new Error('钱包未初始化');
   await refreshTipConfig();
 
-  let amt = parseUnits(amountStr, state.tokenInfo.decimals);
-  if (state.lpInfo.isInternal && state.tokenInfo.decimals >= 9) {
+  const normalizedAmount = normalizeAmount(amountStr);
+  let amt = parseUnits(normalizedAmount, state.tokenInfo.decimals);
+  if (_isFourInternal() && state.tokenInfo.decimals >= 9) {
     const GW = 10n ** 9n;
     amt = (amt / GW) * GW;
   }
   if (amt <= 0n) throw new Error('数量太小');
-  const deadline = BigInt(Math.floor(Date.now() / 1000) + 120);
   const tipRate = getTipRate();
   const slippage = parseFloat($('slippage')?.value) || 15;
   const slipBps = BigInt(Math.floor((100 - slippage) * 100));
+
   let amountOutMin;
-  if (state.lpInfo.isInternal && state.tokenInfo.address) {
-    try {
-      const result = await state.publicClient.readContract({
-        address: HELPER3, abi: HELPER3_ABI, functionName: 'trySell',
-        args: [tokenAddr, amt]
-      });
-      const netFunds = result[2] - result[3];
-      if (netFunds <= 0n) throw new Error('预估卖出收益为零');
-      amountOutMin = (netFunds * slipBps) / 10000n;
-    } catch (e) {
-      throw new Error('无法预估卖出数量: ' + e.message);
-    }
-  } else {
-    amountOutMin = calcAmountOutMin(amt, state.lpInfo.reserveToken, state.lpInfo.reserveBNB, 18, slippage);
+  try {
+    amountOutMin = await _getQuoteSell(tokenAddr, amt, slipBps);
+  } catch (e) {
+    throw new Error('无法预估卖出数量: ' + e.message);
   }
 
   const balance = await state.publicClient.readContract({
-    address: tokenAddr, abi: ERC20_ABI, functionName: 'balanceOf', args: [wc.account.address]
+    address: tokenAddr, abi: ERC20_ABI, functionName: 'balanceOf', args: [wc.address]
   });
   if (balance < amt) throw new Error('代币余额不足');
 
   const approveTarget = getSellApproveTarget();
-  const approveKey = `${wc.account.address}:${tokenAddr}:${approveTarget}`.toLowerCase();
-  if (!state.approvedTokens.has(approveKey)) {
-    const allowance = await state.publicClient.readContract({
-      address: tokenAddr, abi: ERC20_ABI, functionName: 'allowance', args: [wc.account.address, approveTarget]
-    });
-
-    if (allowance < amt) {
-      console.log('[SELL] approve 给', approveTarget);
-      const approveTx = await wc.client.writeContract({
-        address: tokenAddr, abi: ERC20_ABI, functionName: 'approve',
-        args: [approveTarget, BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')],
-        gas: 150000n, gasPrice: parseUnits(gasPrice.toString(), 9)
-      });
-      await state.publicClient.waitForTransactionReceipt({ hash: approveTx });
-    }
-    markApproved(approveKey);
-  }
+  await ensureApproved(walletId, wc.address, tokenAddr, approveTarget, gasPrice, amt, 'SELL');
 
   const t0 = performance.now();
-  console.log('[SELL] token:', tokenAddr, 'amount:', amountStr, 'tipRate:', tipRate.toString());
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 10);
+  console.log('[SELL] token:', tokenAddr, 'amount:', normalizedAmount, 'tipRate:', tipRate.toString());
 
-  const txHash = await wc.client.writeContract({
+  const res = await bscWriteContract(walletId, {
     address: FREEDOM_ROUTER, abi: ROUTER_ABI, functionName: 'sell',
-    args: [tokenAddr, amt, amountOutMin, deadline, tipRate],
+    args: [tokenAddr, amt, amountOutMin, tipRate, deadline],
     gas: 800000n, gasPrice: parseUnits(gasPrice.toString(), 9)
   });
+  const txHash = res.txHash;
 
   const tSent = performance.now();
   console.log(`[SELL] txHash: ${txHash} | 发送耗时: ${((tSent - t0) / 1000).toFixed(2)}s`);

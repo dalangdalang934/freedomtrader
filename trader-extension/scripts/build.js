@@ -9,7 +9,6 @@ const DIST = ROOT + '/dist';
 // Files to copy as-is
 const STATIC_FILES = [
   'manifest.json',
-  'background.js',
   'icon16.png',
   'icon48.png',
   'icon128.png',
@@ -54,6 +53,20 @@ async function build() {
     entryPoints: [path.join(ROOT, 'src/settings.js')],
     bundle: true,
     outfile: path.join(DIST, 'src/settings.js'),
+    format: 'iife',
+    platform: 'browser',
+    target: ['chrome120'],
+    define: { 'process.env.NODE_ENV': '"production"' },
+    minify: false,
+    write: true,
+  });
+
+  // Bundle background.js (service worker)
+  console.log('Bundling background.js...');
+  await esbuild.build({
+    entryPoints: [path.join(ROOT, 'src/background.js')],
+    bundle: true,
+    outfile: path.join(DIST, 'background.js'),
     format: 'iife',
     platform: 'browser',
     target: ['chrome120'],

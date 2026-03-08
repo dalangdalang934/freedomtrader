@@ -8,7 +8,7 @@ export { initSolWalletKeypairs } from './wallet-sol.js';
 
 export function updateBalanceHint() {
   if (state.currentChain === 'sol') {
-    $('balanceHint').textContent = `${state.solActiveWalletIds.filter(id => state.solKeypairs.has(id)).length} 个钱包`;
+    $('balanceHint').textContent = `${state.solActiveWalletIds.filter(id => state.solAddresses.has(id)).length} 个钱包`;
   } else {
     $('balanceHint').textContent = `${state.activeWalletIds.filter(id => state.walletClients.has(id)).length} 个钱包`;
   }
@@ -16,7 +16,7 @@ export function updateBalanceHint() {
 
 export function updateSelectedCount() {
   if (state.currentChain === 'sol') {
-    $('selectedCount').textContent = state.solActiveWalletIds.filter(id => state.solKeypairs.has(id)).length;
+    $('selectedCount').textContent = state.solActiveWalletIds.filter(id => state.solAddresses.has(id)).length;
   } else {
     $('selectedCount').textContent = state.activeWalletIds.filter(id => state.walletClients.has(id)).length;
   }

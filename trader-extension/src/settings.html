@@ -256,7 +256,10 @@
       </div>
       <div id="pwUnlock" style="display:none;">
         <div class="form-group"><input id="unlockPw" type="password" placeholder="输入密码解锁"></div>
-        <button id="unlockBtn" class="btn btn-primary">解锁</button>
+        <div style="display:flex;gap:8px;">
+          <button id="unlockBtn" class="btn btn-primary">解锁</button>
+          <button id="resetAllBtn" class="btn btn-danger btn-small" style="margin-left:auto;">忘记密码</button>
+        </div>
       </div>
       <div id="pwManage" style="display:none;">
         <div style="font-size:12px;color:var(--accent);margin-bottom:10px;font-weight:600;">✓ 已解锁</div>
@@ -273,17 +276,7 @@
         </div>
         <div style="display:flex;gap:8px;">
           <button id="saveLockBtn" class="btn btn-primary btn-small">保存</button>
-          <button id="changePwBtn" class="btn btn-secondary btn-small">修改密码</button>
           <button id="lockNowBtn" class="btn btn-danger btn-small">立即锁定</button>
-        </div>
-      </div>
-      <div id="pwChange" style="display:none;">
-        <div class="form-group"><input id="oldPw" type="password" placeholder="当前密码"></div>
-        <div class="form-group"><input id="chNewPw" type="password" placeholder="新密码（至少6位）"></div>
-        <div class="form-group"><input id="chConfirmPw" type="password" placeholder="确认新密码"></div>
-        <div style="display:flex;gap:8px;">
-          <button id="confirmChangePwBtn" class="btn btn-primary btn-small">确认修改</button>
-          <button id="cancelChangePwBtn" class="btn btn-secondary btn-small">取消</button>
         </div>
       </div>
     </div>

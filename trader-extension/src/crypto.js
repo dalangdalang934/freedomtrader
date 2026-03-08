@@ -1,5 +1,5 @@
-// 消息代理 - 所有加密操作转发给 background service worker
-// 密钥缓存在 background 中，页面切换不丢失
+// Message proxy — all crypto & signing ops forwarded to background service worker
+// Private keys never leave the background scope.
 
 function send(action, data = {}) {
   return new Promise((resolve, reject) => {
@@ -53,19 +53,39 @@ export async function encryptPrivateKey(privateKey, password) {
   return 'enc:' + res.result;
 }
 
-export async function decryptPrivateKey(encryptedValue) {
-  if (!encryptedValue) return null;
-  const ciphertext = encryptedValue.startsWith('enc:') ? encryptedValue.slice(4) : encryptedValue;
-  const res = await send('decrypt', { ciphertext });
-  return res.result;
-}
-
 export function isEncrypted(value) {
   if (!value) return false;
   return value.startsWith('enc:');
 }
 
-export async function changePassword(oldPassword, newPassword) {
-  const res = await send('changePassword', { oldPassword, newPassword });
-  if (res.error) throw new Error(res.error);
+export async function resetAll() {
+  await send('resetAll');
+}
+
+// Decrypt all wallets in background, return { bsc: {id: addr}, sol: {id: addr} }
+export async function initWallets(rpcUrl) {
+  return send('initWallets', { rpcUrl });
+}
+
+function serializeArg(v) {
+  if (typeof v === 'bigint') return { __bigint: v.toString() };
+  if (Array.isArray(v)) return v.map(serializeArg);
+  return v;
+}
+
+// BSC: sign + send writeContract via background. Returns { txHash }.
+export async function bscWriteContract(walletId, { address, abi, functionName, args, value, gas, gasPrice }) {
+  const payload = {
+    walletId, address, abi, functionName,
+    args: args.map(serializeArg),
+    gas: gas.toString(),
+    gasPrice: gasPrice.toString(),
+  };
+  if (value != null) payload.value = value.toString();
+  return send('bscWriteContract', payload);
+}
+
+// SOL: sign + send a serialized transaction via background. Returns { signature }.
+export async function solSignAndSend(walletId, { txBase64, rpcUrl, jitoTipLamports }) {
+  return send('solSignAndSend', { walletId, txBase64, rpcUrl, jitoTipLamports });
 }

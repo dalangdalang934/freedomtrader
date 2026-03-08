@@ -1,18 +1,20 @@
-import { Keypair } from '@solana/web3.js';
-import bs58 from 'bs58';
-import { decryptPrivateKey, isEncrypted } from './crypto.js';
+import { PublicKey } from '@solana/web3.js';
+import { initWallets } from './crypto.js';
 import { getConnection } from './sol/connection.js';
 import { state } from './state.js';
 import { $, escapeHtml } from './utils.js';
+
 export async function initSolWalletKeypairs() {
-  state.solKeypairs.clear();
-  for (const wallet of state.solWallets) {
-    try {
-      let key = wallet.encryptedKey;
-      if (isEncrypted(key)) { key = await decryptPrivateKey(key); if (!key) continue; }
-      const keypair = Keypair.fromSecretKey(bs58.decode(key));
-      state.solKeypairs.set(wallet.id, keypair);
-    } catch (e) { console.error('初始化 SOL 钱包失败:', wallet.name, e); }
+  state.solAddresses.clear();
+  try {
+    const cached = state._initWalletsResult;
+    const result = cached || await initWallets();
+    if (cached) delete state._initWalletsResult;
+    for (const [id, addrStr] of Object.entries(result.sol || {})) {
+      state.solAddresses.set(id, new PublicKey(addrStr));
+    }
+  } catch (e) {
+    console.error('初始化 SOL 钱包失败:', e);
   }
 }
 
@@ -24,11 +26,11 @@ export async function loadSolBalances() {
     state.solWalletBalances.clear();
 
     const activeEntries = state.solActiveWalletIds
-      .map(id => ({ id, kp: state.solKeypairs.get(id) }))
-      .filter(e => e.kp);
+      .map(id => ({ id, pubkey: state.solAddresses.get(id) }))
+      .filter(e => e.pubkey);
 
     const bals = await Promise.all(
-      activeEntries.map(e => conn.getBalance(e.kp.publicKey).catch(() => 0))
+      activeEntries.map(e => conn.getBalance(e.pubkey).catch(() => 0))
     );
 
     activeEntries.forEach((e, i) => {
@@ -38,7 +40,7 @@ export async function loadSolBalances() {
       balances.push({
         name: state.solWallets.find(w => w.id === e.id)?.name || e.id,
         balance: lamports,
-        address: e.kp.publicKey.toBase58(),
+        address: e.pubkey.toBase58(),
       });
     });
 
@@ -56,9 +58,9 @@ export async function loadSolBalances() {
 export function renderSolWalletSelector(container, onRefresh, onLoadBalances) {
   container.innerHTML = state.solWallets.map(w => {
     const isActive = state.solActiveWalletIds.includes(w.id);
-    const hasKeypair = state.solKeypairs.has(w.id);
-    return `<label class="wallet-chip ${isActive ? 'active' : ''} ${!hasKeypair ? 'error' : ''}" data-id="${w.id}">
-      <input type="checkbox" class="wallet-check" data-id="${w.id}" ${isActive ? 'checked' : ''} ${!hasKeypair ? 'disabled' : ''}>
+    const hasAddress = state.solAddresses.has(w.id);
+    return `<label class="wallet-chip ${isActive ? 'active' : ''} ${!hasAddress ? 'error' : ''}" data-id="${w.id}">
+      <input type="checkbox" class="wallet-check" data-id="${w.id}" ${isActive ? 'checked' : ''} ${!hasAddress ? 'disabled' : ''}>
       <span>${escapeHtml(w.name)}</span></label>`;
   }).join('');
 

@@ -20,6 +20,6 @@ export const state = {
   solConfig: { slippage: 25, buyAmount: 0.1, priorityFee: 100000, jitoTip: 100000, rpcUrl: '' },
   solWallets: [],
   solActiveWalletIds: [],
-  solKeypairs: new Map(),
+  solAddresses: new Map(),
   solWalletBalances: new Map(),
 };

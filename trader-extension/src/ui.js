@@ -1,7 +1,7 @@
 import { formatUnits, parseUnits } from 'viem';
 import { state } from './state.js';
-import { $, formatNum } from './utils.js';
-import { HELPER3, HELPER3_ABI } from './constants.js';
+import { $, formatNum, normalizeAmount } from './utils.js';
+import { FREEDOM_ROUTER, ROUTER_ABI, HELPER3, HELPER3_ABI, ROUTE } from './constants.js';
 import { LAMPORTS_PER_SOL } from './sol/constants.js';
 
 function isSol() { return state.currentChain === 'sol'; }
@@ -32,23 +32,33 @@ export function updatePrice() {
 
 async function _updatePriceImpl() {
   const div = $('priceInfo');
-  const amount = parseFloat($('amount').value) || 0;
+  const amountEl = $('amount');
+  const normalizedAmount = normalizeAmount(amountEl?.value || '');
+  const amount = parseFloat(normalizedAmount) || 0;
   if (!div || !state.lpInfo.hasLP || amount <= 0) { if (div) div.style.display = 'none'; return; }
 
   const slip = parseFloat($('slippage').value) || 15;
   const sol = isSol();
   const walletCount = sol
-    ? state.solActiveWalletIds.filter(id => state.solKeypairs.has(id)).length
+    ? state.solActiveWalletIds.filter(id => state.solAddresses.has(id)).length
     : state.activeWalletIds.filter(id => state.walletClients.has(id)).length;
   if (walletCount === 0) { if (div) div.style.display = 'none'; return; }
-  const amountPerWallet = amount / walletCount;
+  const amountPerWallet = normalizeAmount((amount / walletCount).toString());
 
   const nativeDec = sol ? 9 : 18;
   const ns = nativeSymbol();
 
   try {
-    if (!sol && state.lpInfo.isInternal && state.tokenInfo.address && state.publicClient) {
-      await _updateInternalPrice(div, amountPerWallet, walletCount, slip);
+    const route = state.lpInfo.routeSource || ROUTE.NONE;
+    const isBscRouter = !sol && state.tokenInfo.address && state.publicClient;
+    const isFourInternal = route === ROUTE.FOUR_INTERNAL_BNB || route === ROUTE.FOUR_INTERNAL_ERC20;
+    // Buy: FLAP_BONDING uses router quote; FLAP_BONDING_SELL buy goes PancakeSwap (local calc)
+    // Sell: FLAP_BONDING + FLAP_BONDING_SELL both use router quote
+    const useRouterQuoteBuy = isBscRouter && (isFourInternal || route === ROUTE.FLAP_BONDING);
+    const useRouterQuoteSell = isBscRouter && (isFourInternal || route === ROUTE.FLAP_BONDING || route === ROUTE.FLAP_BONDING_SELL);
+    const useRouter = state.tradeMode === 'buy' ? useRouterQuoteBuy : useRouterQuoteSell;
+    if (useRouter) {
+      await _updateRouterPrice(div, amountPerWallet, walletCount, slip);
       return;
     }
 
@@ -56,14 +66,14 @@ async function _updatePriceImpl() {
     const tokenReserve = state.lpInfo.reserveToken;
 
     if (state.tradeMode === 'buy') {
-      const amt = parseUnits(amountPerWallet.toString(), nativeDec);
+      const amt = parseUnits(amountPerWallet, nativeDec);
       let est = quoteReserve > 0n ? (amt * tokenReserve) / (quoteReserve + amt) : 0n;
       if (est > tokenReserve) est = tokenReserve;
       const min = (est * BigInt(Math.floor((100 - slip) * 100))) / 10000n;
       $('estimatedPrice').textContent = `≈ ${formatNum(est, state.tokenInfo.decimals)} ${state.tokenInfo.symbol} × ${walletCount}`;
       $('minOutput').textContent = `≥ ${formatNum(min * BigInt(walletCount), state.tokenInfo.decimals)} ${state.tokenInfo.symbol}`;
     } else {
-      const amt = parseUnits(amountPerWallet.toString(), state.tokenInfo.decimals);
+      const amt = parseUnits(amountPerWallet, state.tokenInfo.decimals);
       let est = tokenReserve > 0n ? (amt * quoteReserve) / (tokenReserve + amt) : 0n;
       if (est > quoteReserve) est = quoteReserve;
       const min = (est * BigInt(Math.floor((100 - slip) * 100))) / 10000n;
@@ -74,32 +84,30 @@ async function _updatePriceImpl() {
   } catch (e) { div.style.display = 'none'; }
 }
 
-async function _updateInternalPrice(div, amountPerWallet, walletCount, slip) {
+async function _updateRouterPrice(div, amountPerWallet, walletCount, slip) {
   const token = state.tokenInfo.address;
   const dec = state.tokenInfo.decimals;
   try {
     if (state.tradeMode === 'buy') {
-      const funds = parseUnits(amountPerWallet.toString(), 18);
-      const result = await state.publicClient.readContract({
-        address: HELPER3, abi: HELPER3_ABI, functionName: 'tryBuy', args: [token, 0n, funds]
+      const funds = parseUnits(amountPerWallet, 18);
+      const est = await state.publicClient.readContract({
+        address: FREEDOM_ROUTER, abi: ROUTER_ABI, functionName: 'quoteBuy', args: [token, funds]
       });
-      const est = result[2];
       const min = (est * BigInt(Math.floor((100 - slip) * 100))) / 10000n;
       $('estimatedPrice').textContent = `≈ ${formatNum(est, dec)} ${state.tokenInfo.symbol} × ${walletCount}`;
       $('minOutput').textContent = `≥ ${formatNum(min * BigInt(walletCount), dec)} ${state.tokenInfo.symbol}`;
     } else {
-      const amt = parseUnits(amountPerWallet.toString(), dec);
-      const result = await state.publicClient.readContract({
-        address: HELPER3, abi: HELPER3_ABI, functionName: 'trySell', args: [token, amt]
+      const amt = parseUnits(amountPerWallet, dec);
+      const est = await state.publicClient.readContract({
+        address: FREEDOM_ROUTER, abi: ROUTER_ABI, functionName: 'quoteSell', args: [token, amt]
       });
-      const est = result[2] - result[3];
       const min = (est * BigInt(Math.floor((100 - slip) * 100))) / 10000n;
       $('estimatedPrice').textContent = `≈ ${formatNum(est > 0n ? est : 0n, 18)} BNB × ${walletCount}`;
       $('minOutput').textContent = `≥ ${formatNum(min > 0n ? min * BigInt(walletCount) : 0n, 18)} BNB`;
     }
     div.style.display = 'block';
   } catch (e) {
-    console.warn('[PRICE] tryBuy/trySell failed:', e.message);
+    console.warn('[PRICE] quoteBuy/quoteSell failed:', e.message);
     div.style.display = 'none';
   }
 }
@@ -128,7 +136,10 @@ export function setMax() {
     const reserveStr = sol ? '0.01' : '0.005';
     let minBal = null;
     for (const id of activeIds) { const bal = balMap.get(id); if (bal !== undefined && (minBal === null || bal < minBal)) minBal = bal; }
-    if (minBal !== null && minBal > 0n) { const reserve = parseUnits(reserveStr, nativeDec); amountEl.value = formatUnits(minBal > reserve ? minBal - reserve : 0n, nativeDec); }
+    if (minBal !== null && minBal > 0n) {
+      const reserve = parseUnits(reserveStr, nativeDec);
+      amountEl.value = normalizeAmount(formatUnits(minBal > reserve ? minBal - reserve : 0n, nativeDec));
+    }
     else amountEl.value = '0';
   } else { setPercentAmount(100); }
   updatePrice();
@@ -140,7 +151,7 @@ export function setPercentAmount(pct) {
   const activeIds = isSol() ? state.solActiveWalletIds : state.activeWalletIds;
   let minBal = null;
   for (const id of activeIds) { const bal = state.tokenBalances.get(id); if (bal !== undefined && (minBal === null || bal < minBal)) minBal = bal; }
-  if (minBal !== null && minBal > 0n) amountEl.value = formatUnits((minBal * BigInt(pct)) / 100n, state.tokenInfo.decimals);
+  if (minBal !== null && minBal > 0n) amountEl.value = normalizeAmount(formatUnits((minBal * BigInt(pct)) / 100n, state.tokenInfo.decimals));
   else amountEl.value = '0';
   updatePrice();
 }
@@ -280,7 +291,12 @@ export function setupEvents() {
       e.preventDefault(); if (slippageInput) slippageInput.value = t.dataset.slip;
       updateSlippageBtn(t.dataset.slip); chrome.storage.local.set({ slippage: t.dataset.slip }); updatePrice(); return;
     }
-    if (t.classList?.contains('quick-btn') && t.dataset.amt) { e.preventDefault(); if (amountInput) amountInput.value = t.dataset.amt; updatePrice(); return; }
+    if (t.classList?.contains('quick-btn') && t.dataset.amt) {
+      e.preventDefault();
+      if (amountInput) amountInput.value = normalizeAmount(t.dataset.amt);
+      updatePrice();
+      return;
+    }
     if (t.classList?.contains('percent-btn') && t.dataset.pct) { e.preventDefault(); setPercentAmount(parseInt(t.dataset.pct, 10)); return; }
     if (t.id === 'settingsBtn' || t.id === 'goSettingsBtn') { e.preventDefault(); location.href = 'settings.html'; return; }
     if (t.classList?.contains('fast-buy') && t.dataset.amt) {
@@ -310,6 +326,8 @@ export function setupEvents() {
     };
   }
   if (amountInput) amountInput.oninput = () => {
+    const normalizedAmount = normalizeAmount(amountInput.value);
+    if (amountInput.value !== normalizedAmount) amountInput.value = normalizedAmount;
     updatePrice();
     const key = isSol() ? 'solBuyAmount' : 'buyAmount';
     chrome.storage.local.set({ [key]: amountInput.value });

@@ -1,9 +1,8 @@
 import {
-  Keypair, PublicKey, Transaction, ComputeBudgetProgram, SystemProgram,
+  PublicKey, Transaction, ComputeBudgetProgram, SystemProgram,
 } from '@solana/web3.js';
-import bs58 from 'bs58';
 import { getConnection, getBlockhashFast } from './connection.js';
-import { LAMPORTS_PER_SOL, DEFAULT_COMPUTE_UNITS, DEFAULT_PRIORITY_FEE_LAMPORTS, WSOL_MINT, SPL_TOKEN_PROGRAM, SOL_TIP_RECIPIENT, DEFAULT_SOL_TIP_BPS, SOL_MARKER_ADDR, JITO_TIP_ACCOUNTS, JITO_BLOCK_ENGINES, DEFAULT_JITO_TIP_LAMPORTS } from './constants.js';
+import { LAMPORTS_PER_SOL, DEFAULT_COMPUTE_UNITS, DEFAULT_PRIORITY_FEE_LAMPORTS, WSOL_MINT, SPL_TOKEN_PROGRAM, SOL_TIP_RECIPIENT, DEFAULT_SOL_TIP_BPS, SOL_MARKER_ADDR, JITO_TIP_ACCOUNTS, DEFAULT_JITO_TIP_LAMPORTS } from './constants.js';
 import { getBondingCurve, getBcFeeConfig, getTokenProgram, getTokenBalance, getPoolReserves, getAmmGlobalConfig, warmDynamicFeeConfig, getAmmDynamicFeesSync } from './accounts.js';
 import { deriveATA } from './pda.js';
 import {
@@ -16,10 +15,8 @@ import {
   buildWrapSolInstructions, buildCloseWsolIx,
   buildCreateBaseATAIx,
 } from './pump-swap.js';
-
-export function loadKeypair(privateKeyBase58) {
-  return Keypair.fromSecretKey(bs58.decode(privateKeyBase58));
-}
+import { solSignAndSend } from '../crypto.js';
+import { state } from '../state.js';
 
 function buildPriorityFeeIxs(computeUnits, priorityFeeLamports) {
   const cu = computeUnits || DEFAULT_COMPUTE_UNITS;
@@ -110,11 +107,11 @@ export async function detectToken(mintAddress) {
   };
 }
 
-export async function buy(keypair, mintAddress, solAmount, slippagePct, opts = {}) {
+export async function buy(walletId, publicKey, mintAddress, solAmount, slippagePct, opts = {}) {
   const conn = getConnection();
   const mint = new PublicKey(mintAddress);
   const lamports = BigInt(Math.floor(solAmount * LAMPORTS_PER_SOL));
-  const user = keypair.publicKey;
+  const user = publicKey;
 
   const t0 = performance.now();
 
@@ -174,16 +171,16 @@ export async function buy(keypair, mintAddress, solAmount, slippagePct, opts = {
 
   instructions.push(buildMarkerIx(user));
 
-  return signSendConfirm(conn, instructions, keypair, t0, {
+  return buildAndSend(conn, walletId, user, instructions, t0, {
     jitoTipLamports: opts.jitoTipLamports,
     blockhashPromise,
   });
 }
 
-export async function sell(keypair, mintAddress, tokenAmountOrPercent, slippagePct, opts = {}) {
+export async function sell(walletId, publicKey, mintAddress, tokenAmountOrPercent, slippagePct, opts = {}) {
   const conn = getConnection();
   const mint = new PublicKey(mintAddress);
-  const user = keypair.publicKey;
+  const user = publicKey;
 
   const t0 = performance.now();
 
@@ -275,7 +272,7 @@ export async function sell(keypair, mintAddress, tokenAmountOrPercent, slippageP
 
   instructions.push(buildMarkerIx(user));
 
-  return signSendConfirm(conn, instructions, keypair, t0, {
+  return buildAndSend(conn, walletId, user, instructions, t0, {
     jitoTipLamports: opts.jitoTipLamports,
     blockhashPromise,
   });
@@ -284,25 +281,6 @@ export async function sell(keypair, mintAddress, tokenAmountOrPercent, slippageP
 function buildJitoTipIx(user, lamports) {
   const tipAccount = JITO_TIP_ACCOUNTS[Math.floor(Math.random() * JITO_TIP_ACCOUNTS.length)];
   return SystemProgram.transfer({ fromPubkey: user, toPubkey: tipAccount, lamports: BigInt(lamports) });
-}
-
-async function sendToJito(rawBase64) {
-  const body = JSON.stringify({
-    jsonrpc: '2.0', id: 1, method: 'sendTransaction',
-    params: [rawBase64, { encoding: 'base64' }],
-  });
-  const results = await Promise.allSettled(
-    JITO_BLOCK_ENGINES.map(url =>
-      fetch(`${url}/api/v1/transactions`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
-      }).then(r => r.json())
-    )
-  );
-  let accepted = 0;
-  for (const r of results) {
-    if (r.status === 'fulfilled' && r.value?.result) accepted++;
-  }
-  console.log(`[JITO] Broadcast to ${JITO_BLOCK_ENGINES.length} engines, ${accepted} accepted`);
 }
 
 function formatTxError(err) {
@@ -372,10 +350,11 @@ async function getBlockTime(conn, sig) {
   return null;
 }
 
-async function signSendConfirm(conn, instructions, keypair, t0, opts = {}) {
-  const jitoTip = opts.jitoTipLamports || DEFAULT_JITO_TIP_LAMPORTS;
+// Build TX, serialize unsigned, send to background for signing + broadcast
+async function buildAndSend(conn, walletId, user, instructions, t0, opts = {}) {
+  const jitoTip = opts.jitoTipLamports ?? DEFAULT_JITO_TIP_LAMPORTS;
   if (jitoTip > 0) {
-    instructions.push(buildJitoTipIx(keypair.publicKey, jitoTip));
+    instructions.push(buildJitoTipIx(user, jitoTip));
   }
 
   const tx = new Transaction().add(...instructions);
@@ -383,20 +362,25 @@ async function signSendConfirm(conn, instructions, keypair, t0, opts = {}) {
     ? await opts.blockhashPromise
     : await getBlockhashFast();
   tx.recentBlockhash = blockhash;
-  tx.feePayer = keypair.publicKey;
+  tx.feePayer = user;
 
   const tBuild = performance.now();
   console.log(`[TX] Build: ${((tBuild - t0) / 1000).toFixed(2)}s`);
 
-  tx.sign(keypair);
-  const raw = tx.serialize();
-  const rawBase64 = raw.toString('base64');
+  const txBuf = tx.serialize({ requireAllSignatures: false, verifySignatures: false });
+  const txBase64 = btoa(String.fromCharCode(...txBuf));
+
+  const rpcUrl = state.solConfig?.rpcUrl || conn.rpcEndpoint;
 
   const sendEpoch = Math.floor(Date.now() / 1000);
-  const [sig] = await Promise.all([
-    conn.sendRawTransaction(raw, { skipPreflight: true, maxRetries: 2 }),
-    sendToJito(rawBase64),
-  ]);
+  const result = await solSignAndSend(walletId, {
+    txBase64,
+    rpcUrl,
+    jitoTipLamports: jitoTip,
+  });
+
+  if (result.error) throw new Error(result.error);
+  const sig = result.signature;
 
   const tSent = performance.now();
   console.log(`[TX] Sent: ${sig} (send ${((tSent - tBuild) / 1000).toFixed(2)}s, Jito tip: ${jitoTip} lamports)`);

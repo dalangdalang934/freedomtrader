@@ -1,6 +1,6 @@
 import { formatUnits } from 'viem';
 import { state } from './state.js';
-import { $, isValidSolAddress, formatNum } from './utils.js';
+import { $, isValidSolAddress, formatNum, escapeHtml } from './utils.js';
 import { showStatus } from './ui.js';
 import { updateBalanceHint } from './wallet.js';
 import { updatePrice } from './ui.js';
@@ -70,14 +70,14 @@ export async function detectSolToken(addr) {
     const decimals = 6;
 
     state.tokenBalances.clear();
-    const activeKeypairs = state.solActiveWalletIds
-      .map(id => ({ id, kp: state.solKeypairs.get(id) }))
-      .filter(e => e.kp);
+    const activeWallets = state.solActiveWalletIds
+      .map(id => ({ id, pk: state.solAddresses.get(id) }))
+      .filter(e => e.pk);
 
     const { getTokenMetadata } = await import('./sol/accounts.js');
     const [tokenBals, meta] = await Promise.all([
-      Promise.all(activeKeypairs.map(e =>
-        getTokenBalance(e.kp.publicKey, result.mint, result.tokenProgram).catch(() => 0n)
+      Promise.all(activeWallets.map(e =>
+        getTokenBalance(e.pk, result.mint, result.tokenProgram).catch(() => 0n)
       )),
       getTokenMetadata(result.mint).catch(() => null),
     ]);
@@ -85,7 +85,7 @@ export async function detectSolToken(addr) {
     const tokenName = meta?.name || '';
 
     let totalBalance = 0n;
-    activeKeypairs.forEach((e, i) => {
+    activeWallets.forEach((e, i) => {
       state.tokenBalances.set(e.id, tokenBals[i]);
       totalBalance += tokenBals[i];
     });
@@ -188,7 +188,7 @@ function showSolLPInfo(result, reserveSOL, reserveToken, decimals, symbol) {
         <div class="val" style="color:var(--yellow);">${(Number(reserveSOL) / LAMPORTS_PER_SOL).toFixed(4)}</div>
       </div>
       <div class="lp-res-item">
-        <div class="lbl" title="${symbol}" style="color:#00ffaa;font-weight:700;">${symbol} 储备</div>
+        <div class="lbl" title="${escapeHtml(symbol)}" style="color:#00ffaa;font-weight:700;">${escapeHtml(symbol)} 储备</div>
         <div class="val" style="color:var(--accent);">${formatNum(reserveToken, decimals)}</div>
       </div>
     </div>

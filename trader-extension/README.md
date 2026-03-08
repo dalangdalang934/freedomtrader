@@ -1,18 +1,21 @@
 # Freedom Trader
 
-BSC MEME 代币交易终端 — Chrome 侧边栏扩展。
+BSC + Solana 双链交易终端 — Chrome 侧边栏扩展。
 
-通过 FreedomRouter 统一路由，自动判断 Four.meme 内盘 / PancakeSwap 外盘，一键买卖。
+通过 FreedomRouter 统一路由 BSC 侧交易，自动判断 Four.meme / Flap / PancakeSwap；SOL 侧支持 Pump.fun / PumpSwap。
 
 ## 功能
 
-- **统一路由** — 输入代币地址，自动检测内盘/外盘，一键交易
+- **统一路由** — 输入代币地址，自动检测 Four.meme / Flap / PancakeSwap / Pump.fun / PumpSwap 路径
 - **多钱包批量交易** — 批量添加私钥，选中多个钱包并发交易
 - **自动识别** — 浏览 debot.ai / gmgn.ai / dexscreener / bscscan 等时自动提取合约地址
+- **本地后台持钥** — 私钥不上传服务器，只在本地插件后台解密和使用，前端页面拿不到明文
 - **密码保护** — PBKDF2 派生密钥 + AES-GCM-256 加密私钥，密钥不存储
 - **自动锁定** — 可配置 5 分钟 ~ 永不锁定，超时自动锁定需重新输入密码
+- **安全路由** — BSC 侧使用合约返回的 `approveTarget`，避免前端猜错授权目标
+- **时效保护** — BSC 交易统一带 `deadline`，减少延迟执行风险
 - **交易计时** — 实时显示发送耗时、确认耗时，便于测算交易速度
-- **完全免费** — 小费 0-1% 自愿设置，默认 0
+- **完全免费** — 小费自愿设置，默认 0
 
 ## 安装（小白推荐）
 
@@ -54,27 +57,47 @@ npm run build
 
 ## 安全机制
 
+### 第一原则
+
+**私钥不上传服务器，只在本地浏览器插件后台 `background service worker` 中解密和使用，前端 UI 页面也拿不到私钥明文。**
+
 ```
 用户密码 → PBKDF2(100000轮, SHA-256) → AES-256-GCM 密钥
                                           ↓
                                     加密/解密私钥
 ```
 
+- **私钥不出本地** — 不依赖中心化后端托管私钥，也不会把明文私钥上传到远端服务器
+- **后台隔离使用** — 私钥只在插件后台内存中短暂解密，用于签名和发送交易
 - **密钥不存储** — 每次由用户密码 + 随机 salt 实时派生
 - **密码验证** — 存储 SHA-256(salt + password) 哈希，用于验证密码正确性
 - **自动锁定** — 超过设定时间后清除内存中的派生密钥
 - **修改密码** — 用旧密码解密所有钱包，用新密码重新加密
+- **授权目标链上判定** — 卖出授权目标以合约返回值为准，避免路径识别错误导致授权给错误合约
+- **路由源码可审计** — BSC 主网 FreedomRouter Proxy / Impl 已在 BscScan 完成验证
+
+## 本次版本升级重点
+
+- **FreedomRouter v6** — BSC 路由统一支持 Four.meme / Flap / PancakeSwap
+- **Flap 接入** — 自动识别 Bonding / DEX 阶段
+- **统一报价** — BSC 报价改为统一走链上 `quoteBuy` / `quoteSell`
+- **安全性强化** — 本地后台持钥 + `deadline` + `approveTarget` + 可审计合约地址，减少错误路由、错误授权和私钥外泄风险
 
 ## 交易流程
 
 ```
-用户 → FreedomRouter (Proxy)
-         ├─ 内盘 (Four.meme): TM_V2.buyTokenAMAP / sellToken
-         └─ 外盘 (PancakeSwap): swapExactETHForTokens / swapExactTokensForETH
+用户 → FreedomRouter (BSC)
+         ├─ Four 内盘: TM_V2 / Helper3
+         ├─ Flap Bonding: Portal
+         └─ 外盘: PancakeSwap
+
+用户 → Solana Router
+         ├─ Pump.fun Bonding Curve
+         └─ PumpSwap
 ```
 
-- **买入**：发送 BNB，代币直接到用户钱包，自动 approve（方便后续卖出）
-- **卖出**：内盘 approve 给 TM_V2，外盘 approve 给 Router Proxy
+- **买入**：发送 BNB / SOL，自动按链和协议选择正确路径
+- **卖出**：BSC 侧优先以合约返回的 `approveTarget` 为准，避免本地猜错授权目标
 
 ## 交易性能
 
@@ -93,8 +116,10 @@ npm run build
 
 | 合约 | 地址 |
 |------|------|
-| FreedomRouter (Proxy) | [`0x87083948E696c19B1CE756dd6995D4a615a7f2c3`](https://bscscan.com/address/0x87083948E696c19B1CE756dd6995D4a615a7f2c3) |
+| FreedomRouter (Proxy) | [`0x444444444444147c48E01D3669260E33d8b33c93`](https://bscscan.com/address/0x444444444444147c48E01D3669260E33d8b33c93) |
+| FreedomRouterImpl | [`0xc7B76F939CbC84d7a7077411974A5CbC9dfb3Bbd`](https://bscscan.com/address/0xc7B76F939CbC84d7a7077411974A5CbC9dfb3Bbd) |
 | TokenManager V2 | [`0x5c952063c7fc8610FFDB798152D69F0B9550762b`](https://bscscan.com/address/0x5c952063c7fc8610FFDB798152D69F0B9550762b) |
+| Flap Portal | [`0xe2cE6ab80874Fa9Fa2aAE65D277Dd6B8e65C9De0`](https://bscscan.com/address/0xe2cE6ab80874Fa9Fa2aAE65D277Dd6B8e65C9De0) |
 
 ## 技术栈
 

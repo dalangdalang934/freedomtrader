@@ -1,6 +1,5 @@
 // Freedom Trader (FT) - BSC/SOL 聚合交易终端 | 完全免费，小费自愿
-import { privateKeyToAccount } from 'viem/accounts';
-import { decryptPrivateKey, isEncrypted } from './crypto.js';
+import { isEncrypted } from './crypto.js';
 import { state } from './state.js';
 import { $ } from './utils.js';
 import { LAMPORTS_PER_SOL } from './sol/constants.js';
@@ -136,17 +135,12 @@ async function switchChain(chain) {
 async function initAfterUnlock() {
   state.config = await chrome.storage.local.get(ALL_CONFIG_KEYS);
 
-  // Legacy single-key migration
-  if (state.config.privateKey && !state.config.wallets) {
-    const key = state.config.privateKey;
-    if (isEncrypted(key)) {
-      const decrypted = await decryptPrivateKey(key);
-      if (decrypted) {
-        const account = privateKeyToAccount(decrypted);
-        state.config.wallets = [{ id: 'legacy', name: '旧钱包', address: account.address, encryptedKey: key }];
-        state.config.activeWalletIds = ['legacy'];
-      }
-    }
+  // Legacy single-key migration: write into wallets array first, then normal init handles decryption
+  if (state.config.privateKey && !state.config.wallets && isEncrypted(state.config.privateKey)) {
+    const legacyWallet = { id: 'legacy', name: '旧钱包', address: '', encryptedKey: state.config.privateKey };
+    state.config.wallets = [legacyWallet];
+    state.config.activeWalletIds = ['legacy'];
+    await chrome.storage.local.set({ wallets: state.config.wallets, activeWalletIds: state.config.activeWalletIds });
   }
 
   state.wallets = state.config.wallets || [];
@@ -164,11 +158,10 @@ async function initAfterUnlock() {
   $('noConfig').style.display = 'none';
   $('tradeUI').style.display = 'block';
 
-  await Promise.all([
-    initBsc(state.config),
-    initSol(state.config),
-    loadApprovedTokens(),
-  ]);
+  // initBsc must complete first: it calls initWallets() which populates both BSC and SOL
+  // address maps; initSol then reads the cached result for SOL addresses
+  await Promise.all([initBsc(state.config), loadApprovedTokens()]);
+  await initSol(state.config);
 
   restoreChainConfig(state.config);
   applyChainUI();
