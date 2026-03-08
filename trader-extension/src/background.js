@@ -234,7 +234,8 @@ const handlers = {
     if (!(await checkExpiry())) return { error: '已锁定，请重新解锁' };
     let wc = bscClients.get(walletId);
     if (!wc) {
-      await handlers.initWallets({ rpcUrl: DEFAULT_RPC });
+      const cfg = await chrome.storage.local.get(['rpcUrl']);
+      await handlers.initWallets({ rpcUrl: cfg.rpcUrl || DEFAULT_RPC });
       wc = bscClients.get(walletId);
     }
     if (!wc) return { error: '钱包未初始化: ' + walletId };
@@ -258,7 +259,8 @@ const handlers = {
     if (!(await checkExpiry())) return { error: '已锁定，请重新解锁' };
     let kp = solKeypairs.get(walletId);
     if (!kp) {
-      await handlers.initWallets({ rpcUrl: DEFAULT_RPC });
+      const cfg = await chrome.storage.local.get(['rpcUrl']);
+      await handlers.initWallets({ rpcUrl: cfg.rpcUrl || DEFAULT_RPC });
       kp = solKeypairs.get(walletId);
     }
     if (!kp) return { error: 'SOL 钱包未初始化: ' + walletId };
