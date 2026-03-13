@@ -1006,3 +1006,26 @@ Chronological record of development sessions, decisions, and changes.
 - 如需，再后续单独整理 `FreedomRouter` 与根目录文档类未提交内容
 
 ---
+
+## 2026-03-13 — 补提遗漏的 regression 脚本
+
+**Scope:** config
+
+**Changes:**
+- 发现上一条 `trader-extension` 提交未包含新文件 `trader-extension/scripts/test-regressions.mjs`
+- 追加一个小提交把回归脚本正式纳入版本控制，避免 `package.json` 中的 `test:regression` 指向不存在文件
+
+**Files touched:**
+- `DEVLOG.md` — 追加本次补提记录
+- `trader-extension/scripts/test-regressions.mjs` — 补充纳入仓库
+
+**Decisions & rationale:**
+- 不改写上一条提交，直接补一个最小 follow-up commit，历史更清晰，也不影响已生成的提交哈希
+
+**Known issues / tech debt:**
+- 当前仓库仍有多组未提交的非插件改动，继续保留在本地工作树
+
+**Next steps:**
+- 推送插件相关提交到现有 GitHub 远端
+
+---
