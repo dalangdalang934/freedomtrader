@@ -24,22 +24,52 @@ export function formatNum(val, dec) {
   return n.toFixed(4);
 }
 
-/**
- * Truncate decimal string to at most `maxDec` fractional digits and strip
- * trailing zeros. Prevents parseUnits from throwing when formatUnits outputs
- * more decimals than the target precision (e.g. 19 digits into 18-dec field).
- * Default 18 covers BNB; callers may pass a lower value for other tokens.
- */
-export function normalizeAmount(input, maxDec = 3) {
-  const s = String(input ?? '').trim();
-  if (!s) return '0';
-  if (/[eE]/.test(s)) return '0';
-  if (!/^\d*\.?\d*$/.test(s)) return '0';
+export function getTradeAmountDecimals(chain, mode, tokenDecimals) {
+  if (mode === 'sell') {
+    const fallback = chain === 'sol' ? 6 : 18;
+    return Math.min(2, tokenDecimals ?? fallback);
+  }
+  return chain === 'sol' ? 9 : 18;
+}
 
-  let [intPart, fracPart] = s.split('.');
+/**
+ * Sanitize live input while preserving typing-friendly intermediate states
+ * such as `0.`, `0.10`, and an empty string. When `maxDec` is null, the
+ * fractional part is left untouched.
+ */
+export function sanitizeAmountInput(input, maxDec = null) {
+  const raw = String(input ?? '').trim();
+  if (!raw) return '';
+
+  let s = raw.replace(/[^\d.]/g, '');
+  if (!s) return '';
+
+  const dotIndex = s.indexOf('.');
+  if (dotIndex !== -1) {
+    s = s.slice(0, dotIndex + 1) + s.slice(dotIndex + 1).replace(/\./g, '');
+  }
+
+  if (s.startsWith('.')) s = `0${s}`;
+
+  const hasDot = s.includes('.');
+  let [intPart, fracPart = ''] = s.split('.');
   intPart = (intPart || '0').replace(/^0+(?=\d)/, '') || '0';
 
-  if (fracPart === undefined) return intPart;
-  fracPart = fracPart.slice(0, maxDec).replace(/0+$/, '');
-  return fracPart ? `${intPart}.${fracPart}` : intPart;
+  if (!hasDot) return intPart;
+  if (typeof maxDec === 'number') fracPart = fracPart.slice(0, maxDec);
+  return `${intPart}.${fracPart}`;
+}
+
+/**
+ * Normalize a decimal string for calculations/submission. This keeps only the
+ * fractional digits supported by the trade flow and strips trailing zeros.
+ */
+export function normalizeAmount(input, maxDec = 18) {
+  const s = sanitizeAmountInput(input, maxDec);
+  if (!s) return '0';
+  if (s.endsWith('.')) return s.slice(0, -1) || '0';
+
+  const [intPart, fracPart = ''] = s.split('.');
+  const trimmedFrac = fracPart.replace(/0+$/, '');
+  return trimmedFrac ? `${intPart}.${trimmedFrac}` : intPart;
 }

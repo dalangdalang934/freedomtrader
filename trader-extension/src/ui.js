@@ -1,11 +1,53 @@
 import { formatUnits, parseUnits } from 'viem';
 import { state } from './state.js';
-import { $, formatNum, normalizeAmount } from './utils.js';
+import { $, formatNum, getTradeAmountDecimals, normalizeAmount, sanitizeAmountInput } from './utils.js';
 import { FREEDOM_ROUTER, ROUTER_ABI, HELPER3, HELPER3_ABI, ROUTE } from './constants.js';
 import { LAMPORTS_PER_SOL } from './sol/constants.js';
 
 function isSol() { return state.currentChain === 'sol'; }
 function nativeSymbol() { return isSol() ? 'SOL' : 'BNB'; }
+function getAmountInputDecimals(mode = state.tradeMode) {
+  return mode === 'sell'
+    ? getTradeAmountDecimals(state.currentChain, 'sell', state.tokenInfo.decimals)
+    : null;
+}
+function getTradeDecimals(mode = state.tradeMode) {
+  return getTradeAmountDecimals(state.currentChain, mode, state.tokenInfo.decimals);
+}
+function getAmountDraftBucket() {
+  return state.amountDrafts[state.currentChain];
+}
+function getStoredBuyAmount() {
+  return isSol() ? (state.config.solBuyAmount || '') : (state.config.buyAmount || '');
+}
+function setStoredBuyAmount(value) {
+  const key = isSol() ? 'solBuyAmount' : 'buyAmount';
+  if (isSol()) state.config.solBuyAmount = value;
+  else state.config.buyAmount = value;
+  chrome.storage.local.set({ [key]: value });
+}
+function getAmountDraft(mode = state.tradeMode) {
+  const drafts = getAmountDraftBucket();
+  if (mode === 'buy' && drafts.buy === '') {
+    drafts.buy = sanitizeAmountInput(getStoredBuyAmount(), null);
+  }
+  return drafts[mode] || '';
+}
+function cacheAmountDraft(value, mode = state.tradeMode, persist = mode === 'buy') {
+  const sanitized = sanitizeAmountInput(value, getAmountInputDecimals(mode));
+  getAmountDraftBucket()[mode] = sanitized;
+  if (persist && mode === 'buy') setStoredBuyAmount(sanitized);
+  return sanitized;
+}
+function applyAmountValue(value, mode = state.tradeMode, persist = mode === 'buy') {
+  const sanitized = cacheAmountDraft(value, mode, persist);
+  const amountEl = $('amount');
+  if (amountEl) amountEl.value = sanitized;
+  return sanitized;
+}
+function restoreAmountDraft(mode = state.tradeMode) {
+  return applyAmountValue(getAmountDraft(mode), mode, false);
+}
 
 export function showStatus(msg, type) {
   $('statusBar').textContent = msg;
@@ -25,25 +67,31 @@ export function updateSlippageBtn(val) {
 }
 
 let _priceTimer = null;
+let _priceRequestId = 0;
 export function updatePrice() {
   clearTimeout(_priceTimer);
-  _priceTimer = setTimeout(_updatePriceImpl, 150);
+  const requestId = ++_priceRequestId;
+  _priceTimer = setTimeout(() => _updatePriceImpl(requestId), 150);
 }
 
-async function _updatePriceImpl() {
+function isPriceRequestCurrent(requestId) {
+  return requestId === _priceRequestId;
+}
+
+async function _updatePriceImpl(requestId) {
   const div = $('priceInfo');
   const amountEl = $('amount');
-  const normalizedAmount = normalizeAmount(amountEl?.value || '');
+  const normalizedAmount = normalizeAmount(amountEl?.value || '', getTradeDecimals());
   const amount = parseFloat(normalizedAmount) || 0;
-  if (!div || !state.lpInfo.hasLP || amount <= 0) { if (div) div.style.display = 'none'; return; }
+  if (!div || !state.lpInfo.hasLP || amount <= 0) { if (div && isPriceRequestCurrent(requestId)) div.style.display = 'none'; return; }
 
   const slip = parseFloat($('slippage').value) || 15;
   const sol = isSol();
   const walletCount = sol
     ? state.solActiveWalletIds.filter(id => state.solAddresses.has(id)).length
     : state.activeWalletIds.filter(id => state.walletClients.has(id)).length;
-  if (walletCount === 0) { if (div) div.style.display = 'none'; return; }
-  const amountPerWallet = normalizeAmount((amount / walletCount).toString());
+  if (walletCount === 0) { if (div && isPriceRequestCurrent(requestId)) div.style.display = 'none'; return; }
+  const amountPerWallet = normalizeAmount((amount / walletCount).toString(), getTradeDecimals());
 
   const nativeDec = sol ? 9 : 18;
   const ns = nativeSymbol();
@@ -58,12 +106,13 @@ async function _updatePriceImpl() {
     const useRouterQuoteSell = isBscRouter && (isFourInternal || route === ROUTE.FLAP_BONDING || route === ROUTE.FLAP_BONDING_SELL);
     const useRouter = state.tradeMode === 'buy' ? useRouterQuoteBuy : useRouterQuoteSell;
     if (useRouter) {
-      await _updateRouterPrice(div, amountPerWallet, walletCount, slip);
+      await _updateRouterPrice(div, amountPerWallet, walletCount, slip, requestId);
       return;
     }
 
     const quoteReserve = state.lpInfo.reserveBNB;
     const tokenReserve = state.lpInfo.reserveToken;
+    if (!isPriceRequestCurrent(requestId)) return;
 
     if (state.tradeMode === 'buy') {
       const amt = parseUnits(amountPerWallet, nativeDec);
@@ -81,10 +130,12 @@ async function _updatePriceImpl() {
       $('minOutput').textContent = `≥ ${formatNum(min * BigInt(walletCount), nativeDec)} ${ns}`;
     }
     div.style.display = 'block';
-  } catch (e) { div.style.display = 'none'; }
+  } catch (e) {
+    if (isPriceRequestCurrent(requestId) && div) div.style.display = 'none';
+  }
 }
 
-async function _updateRouterPrice(div, amountPerWallet, walletCount, slip) {
+async function _updateRouterPrice(div, amountPerWallet, walletCount, slip, requestId) {
   const token = state.tokenInfo.address;
   const dec = state.tokenInfo.decimals;
   try {
@@ -93,6 +144,7 @@ async function _updateRouterPrice(div, amountPerWallet, walletCount, slip) {
       const est = await state.publicClient.readContract({
         address: FREEDOM_ROUTER, abi: ROUTER_ABI, functionName: 'quoteBuy', args: [token, funds]
       });
+      if (!isPriceRequestCurrent(requestId)) return;
       const min = (est * BigInt(Math.floor((100 - slip) * 100))) / 10000n;
       $('estimatedPrice').textContent = `≈ ${formatNum(est, dec)} ${state.tokenInfo.symbol} × ${walletCount}`;
       $('minOutput').textContent = `≥ ${formatNum(min * BigInt(walletCount), dec)} ${state.tokenInfo.symbol}`;
@@ -101,6 +153,7 @@ async function _updateRouterPrice(div, amountPerWallet, walletCount, slip) {
       const est = await state.publicClient.readContract({
         address: FREEDOM_ROUTER, abi: ROUTER_ABI, functionName: 'quoteSell', args: [token, amt]
       });
+      if (!isPriceRequestCurrent(requestId)) return;
       const min = (est * BigInt(Math.floor((100 - slip) * 100))) / 10000n;
       $('estimatedPrice').textContent = `≈ ${formatNum(est > 0n ? est : 0n, 18)} BNB × ${walletCount}`;
       $('minOutput').textContent = `≥ ${formatNum(min > 0n ? min * BigInt(walletCount) : 0n, 18)} BNB`;
@@ -108,11 +161,14 @@ async function _updateRouterPrice(div, amountPerWallet, walletCount, slip) {
     div.style.display = 'block';
   } catch (e) {
     console.warn('[PRICE] quoteBuy/quoteSell failed:', e.message);
-    div.style.display = 'none';
+    if (isPriceRequestCurrent(requestId)) div.style.display = 'none';
   }
 }
 
 export function switchMode(mode) {
+  const prevMode = state.tradeMode;
+  const amountEl = $('amount');
+  if (amountEl && prevMode !== mode) cacheAmountDraft(amountEl.value, prevMode);
   state.tradeMode = mode;
   const ns = nativeSymbol();
   $('tabBuy').classList.toggle('active', mode === 'buy');
@@ -122,6 +178,7 @@ export function switchMode(mode) {
   $('amountLabel').textContent = mode === 'buy' ? `买入数量 (${ns}/钱包)` : '卖出数量 (' + state.tokenInfo.symbol + '/钱包)';
   $('buyQuickRow').style.display = mode === 'buy' ? 'flex' : 'none';
   $('sellPercentRow').classList.toggle('show', mode === 'sell');
+  restoreAmountDraft(mode);
   updatePrice();
 }
 
@@ -138,21 +195,26 @@ export function setMax() {
     for (const id of activeIds) { const bal = balMap.get(id); if (bal !== undefined && (minBal === null || bal < minBal)) minBal = bal; }
     if (minBal !== null && minBal > 0n) {
       const reserve = parseUnits(reserveStr, nativeDec);
-      amountEl.value = normalizeAmount(formatUnits(minBal > reserve ? minBal - reserve : 0n, nativeDec));
+      applyAmountValue(normalizeAmount(formatUnits(minBal > reserve ? minBal - reserve : 0n, nativeDec), nativeDec), 'buy');
     }
-    else amountEl.value = '0';
+    else applyAmountValue('0', 'buy');
   } else { setPercentAmount(100); }
   updatePrice();
 }
 
 export function setPercentAmount(pct) {
   const amountEl = $('amount');
-  if (!amountEl || !state.tokenInfo.address) { if (amountEl) amountEl.value = '0'; updatePrice(); return; }
+  if (!amountEl || !state.tokenInfo.address) {
+    if (amountEl) applyAmountValue('0', 'sell', false);
+    updatePrice();
+    return;
+  }
   const activeIds = isSol() ? state.solActiveWalletIds : state.activeWalletIds;
   let minBal = null;
   for (const id of activeIds) { const bal = state.tokenBalances.get(id); if (bal !== undefined && (minBal === null || bal < minBal)) minBal = bal; }
-  if (minBal !== null && minBal > 0n) amountEl.value = normalizeAmount(formatUnits((minBal * BigInt(pct)) / 100n, state.tokenInfo.decimals));
-  else amountEl.value = '0';
+  const sellDec = getTradeAmountDecimals(state.currentChain, 'sell', state.tokenInfo.decimals);
+  if (minBal !== null && minBal > 0n) applyAmountValue(normalizeAmount(formatUnits((minBal * BigInt(pct)) / 100n, state.tokenInfo.decimals), sellDec), 'sell', false);
+  else applyAmountValue('0', 'sell', false);
   updatePrice();
 }
 
@@ -289,11 +351,14 @@ export function setupEvents() {
     if (t.id === 'tabSell') { e.preventDefault(); switchMode('sell'); return; }
     if (t.classList?.contains('slippage-btn') && t.dataset.slip) {
       e.preventDefault(); if (slippageInput) slippageInput.value = t.dataset.slip;
-      updateSlippageBtn(t.dataset.slip); chrome.storage.local.set({ slippage: t.dataset.slip }); updatePrice(); return;
+      updateSlippageBtn(t.dataset.slip);
+      chrome.storage.local.set({ [isSol() ? 'solSlippage' : 'slippage']: t.dataset.slip });
+      updatePrice();
+      return;
     }
     if (t.classList?.contains('quick-btn') && t.dataset.amt) {
       e.preventDefault();
-      if (amountInput) amountInput.value = normalizeAmount(t.dataset.amt);
+      applyAmountValue(t.dataset.amt);
       updatePrice();
       return;
     }
@@ -326,11 +391,8 @@ export function setupEvents() {
     };
   }
   if (amountInput) amountInput.oninput = () => {
-    const normalizedAmount = normalizeAmount(amountInput.value);
-    if (amountInput.value !== normalizedAmount) amountInput.value = normalizedAmount;
+    applyAmountValue(amountInput.value, state.tradeMode, state.tradeMode === 'buy');
     updatePrice();
-    const key = isSol() ? 'solBuyAmount' : 'buyAmount';
-    chrome.storage.local.set({ [key]: amountInput.value });
   };
   if (slippageInput) slippageInput.oninput = () => {
     updateSlippageBtn(slippageInput.value); updatePrice();

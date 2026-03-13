@@ -4,6 +4,33 @@ Chronological record of development sessions, decisions, and changes.
 
 ---
 
+## 2026-03-13 — FlashBlock Solana 加速链路接入评估
+
+**Scope:** docs
+
+**Changes:**
+- 审阅 FlashBlock 官方公开资料，提炼其 Solana 加速卖点：SWQoS 直连、leader-aware routing、私有光纤、标准 JSON-RPC 提交、区域化 endpoint、最低 tip 要求
+- 对照插件现有 SOL 链路，确认当前已具备 `blockhash` 预取、Jito 双发、WSS 确认，但发送主通道仍是普通 RPC `sendRawTransaction`
+- 输出接入判断：FlashBlock 适合作为“写入专用加速通道”并与现有 Jito 并行，不适合作为当前读取 / 检测 / 预取 / 确认的单一 RPC 替代
+- 梳理落地点：需要拆分 SOL 读写配置、给发送链路增加 Authorization/header 能力、在 background 中新增 FlashBlock 广播器、补 host permissions
+
+**Files touched:**
+- `DEVLOG.md` — 追加本次 FlashBlock 接入评估记录
+
+**Decisions & rationale:**
+- 优先建议“读写分离”而不是整体替换 RPC，因为当前 `Connection` 同时承担读取、blockhash 预取、确认监听和交易发送，FlashBlock 的价值更集中在交易落地
+- FlashBlock 最合理的角色是补强现有普通 RPC 广播腿；与 Jito 并发发送能覆盖更多 leader / 私有通道，而不是二选一
+- 将文档不一致记为集成风险：公开页面对 tip floor、endpoint scheme 和示例格式存在冲突，正式开发前必须先做一次最小可用联调
+
+**Known issues / tech debt:**
+- FlashBlock 子页面路由在当前会话下不可直接抓取，部分细节只能依据 docs 首页与 pricing 页面公开信息推断
+- 官方公开资料里 `0.0001 SOL` / `0.001 SOL` tip 要求和 `http` / `https` endpoint 展示不一致，需要上线前再核验
+
+**Next steps:**
+- 如果决定接入，先做 Phase 1：background 新增 FlashBlock 发送通道，与现有 RPC + Jito 并发广播
+- UI 增加 `SOL 读 RPC / 写 RPC / WSS / FlashBlock API Key` 四项配置，并将 API key 仅暴露给 background
+- 用真实 endpoint 做一次 smoke test，确认 tip floor、鉴权头、sendTransaction payload 和返回结构
+
 ## 2026-03-08 — 插件改用 vanity.js 部署的 Proxy
 
 **Scope:** config
@@ -690,3 +717,292 @@ Chronological record of development sessions, decisions, and changes.
 **Decisions & rationale:**
 - “本地加密”本身不够直观，用户更关心私钥是否会上传到服务器
 - 发布文案优先回答最核心的信任问题：私钥只在本地后台使用，不由远端托管
+
+---
+
+## 2026-03-09 — 新增推特更新公告草稿
+
+**Scope:** docs
+
+**Changes:**
+- 新增 `TWITTER-UPDATE-2026-03-09.md`，用于对外发布 2.1.0 更新说明
+- 文案重点突出“私钥不上传服务器，只在本地插件后台使用”的安全模型
+- 同时补充更适合公开场景的用词建议，避免使用“100% 安全”这类绝对化表述
+
+**Files touched:**
+- `TWITTER-UPDATE-2026-03-09.md` — 推特短版、正式版、推荐版与用词建议
+
+**Decisions & rationale:**
+- 推特文案需要足够强势，但不能写成无法自证的绝对安全承诺
+- 用“避免后端托管私钥的中心化单点风险”替代“绝对不可能被盗”，更专业也更稳
+
+---
+
+## 2026-03-09 — 新增本地持钥安全模型说明
+
+**Scope:** docs
+
+**Changes:**
+- 新增 `SECURITY-MODEL-LOCAL-KEYS.md`
+- 文档只聚焦一个核心概念：私钥不上传服务器，只在本地插件后台解密和使用
+- 刻意不展开网站诱导、钓鱼等外围风险，保持对外口径简洁直接
+
+**Files touched:**
+- `SECURITY-MODEL-LOCAL-KEYS.md` — 本地持钥安全模型说明
+
+**Decisions & rationale:**
+- 用户当前要强调的是“插件不是后端托管私钥”这一点
+- 对外传播时，简短明确比全面铺开更有效
+
+---
+
+## 2026-03-10 — LimitOrderBook 限价单合约
+
+**Scope:** feature
+
+**Changes:**
+1. **新增 LimitOrderBook.sol** — 独立的 BSC 限价单合约，支持买入/卖出限价单。用户托管 BNB（买单）或 Token（卖单），白名单执行者在价格条件满足时通过 FreedomRouter 执行交易，所得资产原子性转给用户
+2. **USD 计价** — 限价单统一用 USD 设置目标价（18 decimals）。价格从 PancakeSwap V2 LP 储备计算：稳定币报价直接返回，WBNB 报价通过 WBNB/USDT 对换算。支持 USDT/USD1/USDC/BUSD/FDUSD 稳定币和 WBNB 报价
+3. **执行流程** — 买入：扣费 → FreedomRouter.buy{value}() → Token 转给用户。卖出：approve → FreedomRouter.sell() → BNB 扣费后转给用户
+4. **部署脚本** — `deploy-limit-order.js` 部署合约并自动设置 deployer 为执行者
+5. **测试脚本** — `test-limit-order.js` 支持 info/price/create-buy/create-sell/cancel/execute/check/pending/setup 命令
+
+**Files touched:**
+- `FreedomRouter/contracts/LimitOrderBook.sol` — 新增 ~350 行
+- `FreedomRouter/scripts/deploy-limit-order.js` — 新增部署脚本
+- `FreedomRouter/scripts/test-limit-order.js` — 新增测试脚本
+- `FreedomRouter/package.json` — 新增 deploy:limit 和 test:limit 命令
+
+**Decisions & rationale:**
+- 存 BNB 不转 USDT → gas 更低，执行时直接调 FreedomRouter.buy()
+- USD 计价 → 用户体验统一，WBNB LP 和稳定币 LP 的代币都用同一单位
+- 复用 FreedomRouter → 支持 Four.meme/Flap 所有路由，路由逻辑一处维护
+- 不支持 Four 内盘 → 内盘代币不可转账，无法托管
+- 白名单执行者 → 防止抢跑，项目方可控
+- `_findBestQuote` 复制自 FreedomRouter（其为 internal）→ 保持独立
+
+**Known issues / tech debt:**
+- Four 内盘不支持（不可转账）
+- 价格基于 V2 储备，V3 不在范围
+- 极低流动性池的价格可被操纵
+- 未做 UUPS（简单合约，可重新部署）
+
+**Next steps:**
+- 部署到 BSC 主网
+- 链上测试买单/卖单完整流程
+- 开发 Keeper 脚本
+- 插件侧接入限价单 UI
+
+---
+
+## 2026-03-10 — 新增官网 landing page
+
+**Scope:** feature
+
+**Changes:**
+1. **新增根目录官网首页** — 添加 `index.html`，围绕 Chrome 扩展定位组织完整 landing page，覆盖 Hero、双链执行栈、核心功能、安全模型、下载与社群入口
+2. **新增品牌化视觉样式** — 添加 `site.css`，使用浅底高对比风格、青绿色品牌主色、渐变氛围、悬浮协议标签、伪控制台展示和响应式布局
+3. **新增轻交互脚本** — 添加 `site.js`，实现滚动 reveal 动画、BSC/Solana tab 切换和页脚年份填充
+4. **链接与验证** — 页面接入 Chrome Web Store、Telegram、X、隐私政策和 BSC 路由合约链接；本地检查 HTML 资源引用无缺失，并重新执行 `trader-extension` 构建通过
+
+**Files touched:**
+- `index.html` — 官网首页结构与对外文案
+- `site.css` — 官网视觉系统、布局、动画与响应式样式
+- `site.js` — reveal 动画、tab 切换和年份逻辑
+
+**Decisions & rationale:**
+- 采用根目录静态站而不是引入新前端框架 → 可直接部署，且能复用现有 `privacy.html` 与扩展图标资源
+- 官网文案优先突出“自动路由 + 本地后台持钥 + 多钱包批量” → 这是产品最有辨识度的卖点，不做泛泛功能堆砌
+- 保持浅色主视觉并用深色交易控制台做对比 → 更接近产品发布页，也避免整站陷入常见暗色模板感
+
+**Known issues / tech debt:**
+- 当前环境无法直接起本地 HTTP 服务，也没有现成 Playwright 浏览器内核，因此未做真实浏览器截图级视觉校验
+- 官网暂未接入扩展截图或真实交易录屏，后续可以补强社交传播效果
+
+**Next steps:**
+- 在真实浏览器里做一次桌面端和移动端视觉走查
+- 视需要补充 OG 图、favicon 细化和产品截图
+
+---
+
+## 2026-03-11 — 官网 Hero 强化 0 手续费表达
+
+**Scope:** feature
+
+**Changes:**
+1. **Hero 文案重构** — 将原本过长的标题改为“0 手续费”数字卡片 + 短标题组合，不再用一整句长文案硬撑主视觉
+2. **0 手续费前置** — Hero 副文案和亮点标签都明确补充“默认 0 手续费”，把卖点从描述层提到视觉层
+3. **排版收紧** — 新增 Hero 顶部卡片样式、分行标题样式，并强化亮点条首个标签的视觉权重
+
+**Files touched:**
+- `index.html` — Hero 标题、副文案与亮点标签调整
+- `site.css` — Hero 数字卡片、短标题排版和首个亮点标签强化样式
+
+**Decisions & rationale:**
+- “0 手续费”是最该被第一眼看到的信息，不应该埋在长句子中部
+- Hero 标题改成短句后，阅读节奏更像产品页，也更适合桌面和移动端断行
+
+**Known issues / tech debt:**
+- 仍未在真实浏览器中做视觉走查，当前只完成结构和构建层面的校验
+
+**Next steps:**
+- 在真实浏览器里确认 Hero 新版桌面端和移动端的断行效果
+
+---
+
+## 2026-03-11 — 官网 Hero 右侧视觉重构
+
+**Scope:** feature
+
+**Changes:**
+1. **移除随机漂浮协议气泡** — 删除 Hero 右侧原先的 `protocol-orbit` 漂浮标签，不再让 Four / Flap / Pump / Jito 以无层级的散点方式出现
+2. **改为结构化链路展示** — 新增 BSC / Solana 两张侧卡，分别承载 FreedomRouter 路由能力与 RPC + Jito + WSS 的发送确认链路
+3. **指标条优化** — 将底部指标改为 `0 平台费 / 2 条主链 / 批量多钱包模式`，让产品信息更像品牌化模块而不是占位数字
+4. **Jito 语义归位** — 不再把 Jito 当作孤立气泡展示，而是明确放回 Solana 加速发送链路里
+
+**Files touched:**
+- `index.html` — Hero 右侧结构从漂浮标签改为双链信息卡 + 中央控制台
+- `site.css` — 新增 `hero-flow`、`stack-panel` 和新版指标条样式，移除旧漂浮气泡逻辑
+
+**Decisions & rationale:**
+- Hero 的视觉重点应该是“产品系统感”，不是把协议名随机撒在空中
+- Jito 属于 Solana 的发送加速能力，放进 Solana 结构卡里比做成独立气泡更准确也更好看
+
+**Known issues / tech debt:**
+- 当前仍未做真实浏览器视觉走查，只完成结构与构建校验
+
+**Next steps:**
+- 在真实浏览器里确认新版 Hero 右侧在桌面端和移动端的留白与层级
+
+---
+
+## 2026-03-13 — 交易输入精度修正与长开性能收敛
+
+**Scope:** fix
+
+**Changes:**
+1. **金额输入重构** — 将交易页 `amount` 从 `type="number"` 改为 `type="text" + inputmode="decimal"`，移除浏览器原生 `step` 对输入行为的干扰
+2. **输入态 / 提交态分离** — 新增 `sanitizeAmountInput()` 处理实时输入，保留 `0.`、`0.10` 这类中间态；`normalizeAmount()` 仅在预估、快捷填充和实际下单前做规范化，避免边打字边被重写
+3. **精度规则调整** — 买入输入不再在输入阶段限制小数位；卖出统一限制为最多 2 位小数，同时仍按代币实际 decimals 做链上转换
+4. **长期打开性能优化** — 为 `loadBalances()` 增加 in-flight 去重，避免慢 RPC 下 30 秒轮询重叠；为 SOL blockhash 预取增加并发保护，并在当前链不是 SOL 时停止无意义的 2 秒预取
+
+**Files touched:**
+- `trader-extension/src/trader.html` — 金额输入框改为文本输入，移除原生小数步进限制
+- `trader-extension/src/utils.js` — 新增金额输入清洗与动态精度规则
+- `trader-extension/src/ui.js` — 交易页输入、模式切换、快捷按钮、百分比卖出的金额处理改为新逻辑
+- `trader-extension/src/batch.js` — 批量买卖按新精度规则规范化金额
+- `trader-extension/src/trading.js` — BSC 买卖在提交前按新规则规范化金额
+- `trader-extension/src/wallet.js` — 余额加载增加重入保护
+- `trader-extension/src/sol/connection.js` — blockhash 预取增加并发保护与停用逻辑
+- `trader-extension/src/trader.js` — 仅在 SOL 链激活时启动 SOL 连接预取
+
+**Decisions & rationale:**
+- 实时输入不应该做“去尾零 + 去结尾小数点”这类强归一化，否则会直接破坏正常输入节奏，这就是 `0.1` 后续偶发输不进去的根因
+- 买入场景优先保证输入流畅，再在提交阶段按链精度裁剪，避免 UI 过早干预
+- 卖出限制 2 位小数可降低误触和超细碎卖单，同时保留和用户要求一致的交互
+- 当前链为 BSC 时继续每 2 秒请求一次 SOL blockhash 没有收益，只会增加长时间打开页面时的无效开销
+
+**Known issues / tech debt:**
+- 买入虽然在输入阶段不限制小数，但提交时仍会按 BSC 18 位 / SOL 9 位裁剪，这是链本身精度决定的，不可能真正无限精度
+- 价格预估里仍有少量 `parseFloat` 路径，极端超小金额下显示精度可能与最终链上换算存在微小差异
+
+**Next steps:**
+- 在真实插件页面手测以下输入序列：`0.`、`0.1`、`0.10`、`0.123456`、买入切卖出、卖出切买入
+- 观察长时间打开侧边栏时网络请求频率，确认 BSC 模式下不会继续刷新 SOL blockhash
+- 如仍有输入法或光标跳动问题，再补一轮 caret 位置保护
+
+---
+
+## 2026-03-13 — 交易页回归修复与二次审计
+
+**Scope:** fix
+
+**Changes:**
+1. **余额刷新防串链** — 将 `loadBalances()` 改为按链、RPC 和选中钱包集做上下文去重；旧请求即使晚回来，也不会再把过期结果写回当前页面
+2. **价格预估防回写** — 为预估请求增加 request id，连续输入或切链切模式时，旧报价不会覆盖新报价
+3. **买卖金额草稿隔离** — 新增按链/按模式的金额草稿；买入金额不再在切到卖出时被截成 2 位，卖出金额也不再污染买入默认值
+4. **细节收尾** — 修复 SOL 滑点预设误写到 BSC 键、空钱包时余额明细不清空、`getBlockhashFast()` 在无连接时的空引用问题
+
+**Files touched:**
+- `trader-extension/src/state.js` — 增加按链/按模式金额草稿状态
+- `trader-extension/src/ui.js` — 金额草稿恢复、价格预估请求版本化、SOL 滑点预设持久化修正
+- `trader-extension/src/trader.js` — 链配置保存/恢复改为使用买入草稿
+- `trader-extension/src/wallet.js` — 余额刷新上下文去重与过期请求失效
+- `trader-extension/src/wallet-bsc.js` — BSC 余额回写增加过期保护，空明细时清空 UI
+- `trader-extension/src/wallet-sol.js` — SOL 余额回写增加过期保护，空明细时清空 UI
+- `trader-extension/src/sol/connection.js` — `getBlockhashFast()` 空连接保护
+
+**Decisions & rationale:**
+- 仅做“请求去重”不够，必须同时防止旧异步结果回写 DOM，否则切链和连续输入时仍会出现错链显示与跳价
+- 金额输入真正需要的是“买入 / 卖出双草稿”，而不是简单地在 `switchMode()` 里改写同一个输入框内容
+- 侧边栏这类长开页面，最容易出问题的不是一次性逻辑，而是慢 RPC 下异步结果的先后顺序失控，这轮修复重点就是把顺序约束补齐
+
+**Known issues / tech debt:**
+- 这次仍然是静态审计 + 构建验证，未在真实 Chrome 侧边栏里做数小时长开压测
+- 价格预估仍然依赖实时链上读调用；如果 RPC 本身抖动严重，体验仍会受限，只是不会再因为旧请求回写而额外恶化
+
+**Next steps:**
+- 在真实插件里重点手测：快速切链、快速点买/卖 tab、连续输入金额、切换钱包勾选
+- 如果还想继续压缩体感卡顿，可以给价格预估再加一层最小输入间隔或本地缓存
+
+---
+
+## 2026-03-13 — 交易页回归测试补齐
+
+**Scope:** test
+
+**Changes:**
+1. **新增本地回归脚本** — 添加 `trader-extension/scripts/test-regressions.mjs`，用最小 DOM / Chrome mock 直接跑真实前端模块，不依赖浏览器 UI
+2. **新增测试命令** — 在 `trader-extension/package.json` 增加 `npm run test:regression`
+3. **覆盖关键修复点** — 回归脚本断言以下 5 条路径：
+   - 金额清洗与规范化函数
+   - 买入 / 卖出金额草稿隔离
+   - SOL 滑点预设持久化到正确 storage key
+   - 余额刷新在切换上下文时丢弃旧请求结果
+   - 价格预估在连续输入时丢弃旧异步报价
+4. **执行结果** — 本地运行 `npm run test:regression` 全部通过（5/5），随后再次执行 `cd trader-extension && npm run build` 通过
+
+**Files touched:**
+- `trader-extension/scripts/test-regressions.mjs` — 新增前端回归测试脚本
+- `trader-extension/package.json` — 新增 `test:regression` 命令
+
+**Decisions & rationale:**
+- 这次问题主要集中在前端状态和异步时序，单纯依赖 build 不够，必须补针对性的行为回归
+- 当前仓库没有现成测试框架，因此采用零依赖 Node 脚本 + mock 环境，优先把最容易回归的核心路径固定下来
+
+**Known issues / tech debt:**
+- 该脚本仍属于模块级回归测试，不是浏览器真实渲染测试，无法覆盖 Chrome 扩展宿主环境差异
+- 真实 RPC 延迟、浏览器性能面板、长时间内存曲线仍需要手动压测补充
+
+**Next steps:**
+- 在 Chrome 侧边栏里做一次真实手测和长开观察，重点看 Network/Performance 面板
+- 后续如果继续扩前端逻辑，可以把这套脚本继续扩成更多行为断言
+
+---
+
+## 2026-03-13 — 整理 trader-extension 提交与验证
+
+**Scope:** config
+
+**Changes:**
+- 重新梳理当前工作树，收窄本次准备提交的范围到 `trader-extension`
+- 在提交前重新验证 `cd trader-extension && npm run build` 通过
+- 补跑 `cd trader-extension && npm run test:regression` 通过，确认金额输入、余额刷新和异步报价回归脚本仍然稳定
+- 顺带执行 `cd FreedomRouter && npx hardhat compile`，确认本地未提交的合约工作树仍可编译，但本次不纳入提交
+
+**Files touched:**
+- `DEVLOG.md` — 追加本次分批提交与验证记录
+
+**Decisions & rationale:**
+- 用户要求本次只提交插件，因此路由合约与其他根目录文档继续保留在本地工作树
+- 提交前做最小验证，比单纯把当前 index 原样提交更稳，能减少“提交成功但构建已断”的无效提交
+
+**Known issues / tech debt:**
+- 当前工作树仍包含仓库根目录的其他未提交内容，本次只聚焦 `FreedomRouter` 与 `trader-extension`
+- 这轮验证以本地构建、回归脚本和合约编译为主，未补链上真实交易或 Chrome 宿主环境手测
+
+**Next steps:**
+- 只提交 `trader-extension` 与对应 `DEVLOG` 记录，并保持远端仍推送到现有 `origin`
+- 如需，再后续单独整理 `FreedomRouter` 与根目录文档类未提交内容
+
+---

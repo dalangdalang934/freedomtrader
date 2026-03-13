@@ -1,6 +1,6 @@
 import { formatUnits, parseUnits } from 'viem';
 import { state } from './state.js';
-import { $, normalizeAmount } from './utils.js';
+import { $, getTradeAmountDecimals, normalizeAmount } from './utils.js';
 import { showStatus, showToast } from './ui.js';
 import { buy, sell } from './trading.js';
 import { solBuy, solSell } from './sol-trading.js';
@@ -9,6 +9,8 @@ import { detectToken } from './token.js';
 
 function isSol() { return state.currentChain === 'sol'; }
 function quoteSymbol() { return isSol() ? 'SOL' : 'BNB'; }
+function getBuyDecimals() { return getTradeAmountDecimals(state.currentChain, 'buy', state.tokenInfo.decimals); }
+function getSellDecimals() { return getTradeAmountDecimals(state.currentChain, 'sell', state.tokenInfo.decimals); }
 
 function getActiveWallets() {
   if (isSol()) {
@@ -36,7 +38,7 @@ function getJitoTip() {
 }
 
 function doBuy(id, tokenAddr, amountStr) {
-  const normalizedAmount = normalizeAmount(amountStr);
+  const normalizedAmount = normalizeAmount(amountStr, getBuyDecimals());
   if (isSol()) {
     return solBuy(id, tokenAddr, parseFloat(normalizedAmount), getSlippage(), {
       priorityFee: getPriorityFee(),
@@ -51,7 +53,7 @@ function doSell(id, tokenAddr, amountStr) {
     let solSellAmount = amountStr;
     if (!amountStr.endsWith('%')) {
       const dec = state.tokenInfo.decimals || 6;
-      const normalizedAmount = normalizeAmount(amountStr);
+      const normalizedAmount = normalizeAmount(amountStr, getSellDecimals());
       solSellAmount = parseUnits(normalizedAmount, dec).toString();
     }
     return solSell(id, tokenAddr, solSellAmount, getSlippage(), {
@@ -59,13 +61,13 @@ function doSell(id, tokenAddr, amountStr) {
       jitoTip: getJitoTip(),
     });
   }
-  return sell(id, tokenAddr, amountStr, getPriorityFee());
+  return sell(id, tokenAddr, normalizeAmount(amountStr, getSellDecimals()), getPriorityFee());
 }
 
 export async function executeBatchTrade() {
   const tokenAddr = $('tokenAddress').value.trim();
   const amountStr = $('amount').value;
-  const normalizedAmount = normalizeAmount(amountStr);
+  const normalizedAmount = normalizeAmount(amountStr, state.tradeMode === 'sell' ? getSellDecimals() : getBuyDecimals());
   if (amountStr !== normalizedAmount) $('amount').value = normalizedAmount;
 
   if (!tokenAddr || !state.lpInfo.hasLP) { showStatus('请输入有效的代币地址', 'error'); return; }
@@ -118,7 +120,7 @@ export async function executeBatchTrade() {
 }
 
 export async function fastBuy(amountStr) {
-  const normalizedAmount = normalizeAmount(amountStr);
+  const normalizedAmount = normalizeAmount(amountStr, getBuyDecimals());
   const tokenAddr = $('tokenAddress').value.trim();
   if (!tokenAddr || !state.lpInfo.hasLP) { showStatus('请先输入代币地址', 'error'); return; }
   if (parseFloat(normalizedAmount) <= 0) { showStatus('请输入数量', 'error'); return; }

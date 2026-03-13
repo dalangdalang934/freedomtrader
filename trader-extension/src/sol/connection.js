@@ -8,6 +8,7 @@ let _wssUrl = null;
 let _latestBlockhash = null;
 let _blockhashAge = 0;
 let _blockhashTimer = null;
+let _blockhashRefreshPromise = null;
 const BLOCKHASH_REFRESH_MS = 2000;
 const BLOCKHASH_MAX_AGE_MS = 10000;
 
@@ -50,19 +51,30 @@ export function getWssUrl() {
 // ── Blockhash prefetch ──────────────────────────────────────────────────────
 
 async function refreshBlockhash() {
+  if (_blockhashRefreshPromise) return _blockhashRefreshPromise;
+
+  _blockhashRefreshPromise = (async () => {
+    try {
+      const conn = _connection;
+      if (!conn) return;
+      const result = await conn.getLatestBlockhash('confirmed');
+      if (_connection !== conn) return;
+      _latestBlockhash = result;
+      _blockhashAge = Date.now();
+    } catch (e) {
+      console.warn('[BLOCKHASH] Prefetch failed:', e.message);
+    }
+  })();
+
   try {
-    const conn = _connection;
-    if (!conn) return;
-    const result = await conn.getLatestBlockhash('confirmed');
-    _latestBlockhash = result;
-    _blockhashAge = Date.now();
-  } catch (e) {
-    console.warn('[BLOCKHASH] Prefetch failed:', e.message);
+    return await _blockhashRefreshPromise;
+  } finally {
+    _blockhashRefreshPromise = null;
   }
 }
 
 function restartBlockhashPrefetch() {
-  if (_blockhashTimer) clearInterval(_blockhashTimer);
+  stopBlockhashPrefetch();
   _latestBlockhash = null;
   _blockhashAge = 0;
 
@@ -71,13 +83,18 @@ function restartBlockhashPrefetch() {
   _blockhashTimer = setInterval(refreshBlockhash, BLOCKHASH_REFRESH_MS);
 }
 
+export function stopBlockhashPrefetch() {
+  if (_blockhashTimer) clearInterval(_blockhashTimer);
+  _blockhashTimer = null;
+}
+
 /**
  * Returns a prefetched blockhash if fresh enough, otherwise fetches a new one.
  * When prefetch is active, this returns instantly (0ms) most of the time.
  */
 export function getBlockhashFast() {
-  const conn = _connection;
-  if (!conn) return conn.getLatestBlockhash('confirmed');
+  const conn = _connection || getConnection();
+  if (!conn) return Promise.reject(new Error('SOL connection not initialized'));
 
   if (_latestBlockhash && (Date.now() - _blockhashAge < BLOCKHASH_MAX_AGE_MS)) {
     return Promise.resolve(_latestBlockhash);

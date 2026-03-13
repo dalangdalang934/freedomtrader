@@ -25,13 +25,14 @@ export async function initWalletClients() {
   state._initWalletsResult = result;
 }
 
-export async function loadBscBalances() {
+export async function loadBscBalances(isCurrent = () => true) {
   try {
     let totalBNB = 0n;
     const balances = [];
     state.walletBalances.clear();
     const activeEntries = state.activeWalletIds.map(id => ({ id, wc: state.walletClients.get(id) })).filter(e => e.wc);
     const bals = await Promise.all(activeEntries.map(e => state.publicClient.getBalance({ address: e.wc.address }).catch(() => 0n)));
+    if (!isCurrent()) return false;
     activeEntries.forEach((e, i) => {
       state.walletBalances.set(e.id, bals[i]);
       totalBNB += bals[i];
@@ -43,8 +44,12 @@ export async function loadBscBalances() {
       $('balanceDetails').innerHTML = balances.map(b =>
         `<div class="bal-row"><span>${escapeHtml(b.name)}</span><span>${parseFloat(formatUnits(b.balance, 18)).toFixed(4)} BNB</span></div>`
       ).join('');
+    } else {
+      $('balanceDetails').innerHTML = '';
     }
+    return true;
   } catch (e) { console.error(e); }
+  return false;
 }
 
 export function renderBscWalletSelector(container, onRefresh, onLoadBalances) {

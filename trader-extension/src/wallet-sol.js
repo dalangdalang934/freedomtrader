@@ -18,7 +18,7 @@ export async function initSolWalletKeypairs() {
   }
 }
 
-export async function loadSolBalances() {
+export async function loadSolBalances(isCurrent = () => true) {
   try {
     const conn = getConnection();
     let totalSOL = 0n;
@@ -32,6 +32,7 @@ export async function loadSolBalances() {
     const bals = await Promise.all(
       activeEntries.map(e => conn.getBalance(e.pubkey).catch(() => 0))
     );
+    if (!isCurrent()) return false;
 
     activeEntries.forEach((e, i) => {
       const lamports = BigInt(bals[i]);
@@ -51,8 +52,12 @@ export async function loadSolBalances() {
       $('balanceDetails').innerHTML = balances.map(b =>
         `<div class="bal-row"><span>${escapeHtml(b.name)}</span><span>${(Number(b.balance) / 1e9).toFixed(4)} SOL</span></div>`
       ).join('');
+    } else {
+      $('balanceDetails').innerHTML = '';
     }
+    return true;
   } catch (e) { console.error(e); }
+  return false;
 }
 
 export function renderSolWalletSelector(container, onRefresh, onLoadBalances) {

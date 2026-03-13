@@ -2,6 +2,10 @@ export const state = {
   config: {},
   tradeMode: 'buy',
   currentChain: 'bsc',
+  amountDrafts: {
+    bsc: { buy: '', sell: '' },
+    sol: { buy: '', sell: '' },
+  },
 
   // shared — current chain's token/LP info (written by token-bsc or token-sol)
   tokenInfo: { decimals: 18, symbol: '', balance: 0n },

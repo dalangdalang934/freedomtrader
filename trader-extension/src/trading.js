@@ -2,7 +2,7 @@ import { parseUnits } from 'viem';
 import { FREEDOM_ROUTER, ROUTER_ABI, ERC20_ABI, HELPER3_ABI, TOKEN_MANAGER_V2, HELPER3, ZERO_ADDR, DEFAULT_TIP_RATE, ROUTE } from './constants.js';
 import { bscWriteContract } from './crypto.js';
 import { state } from './state.js';
-import { $, normalizeAmount } from './utils.js';
+import { $, getTradeAmountDecimals, normalizeAmount } from './utils.js';
 
 const APPROVE_KEY = 'approvedTokens';
 const MAX_UINT256 = BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
@@ -171,7 +171,7 @@ export async function buy(walletId, tokenAddr, amountStr, gasPrice) {
   if (!wc) throw new Error('钱包未初始化');
   await refreshTipConfig();
 
-  const normalizedAmount = normalizeAmount(amountStr);
+  const normalizedAmount = normalizeAmount(amountStr, getTradeAmountDecimals(state.currentChain, 'buy', state.tokenInfo.decimals));
   const amt = parseUnits(normalizedAmount, 18);
   if (amt <= 0n) throw new Error('数量太小');
   const tipRate = getTipRate();
@@ -218,7 +218,7 @@ export async function sell(walletId, tokenAddr, amountStr, gasPrice) {
   if (!wc) throw new Error('钱包未初始化');
   await refreshTipConfig();
 
-  const normalizedAmount = normalizeAmount(amountStr);
+  const normalizedAmount = normalizeAmount(amountStr, getTradeAmountDecimals(state.currentChain, 'sell', state.tokenInfo.decimals));
   let amt = parseUnits(normalizedAmount, state.tokenInfo.decimals);
   if (_isFourInternal() && state.tokenInfo.decimals >= 9) {
     const GW = 10n ** 9n;

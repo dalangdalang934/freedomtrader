@@ -7,7 +7,7 @@ import { checkAndShowLock, setupLockEvents } from './lock.js';
 import { createClient, initWalletClients, initSolWalletKeypairs, renderWalletSelector, loadBalances } from './wallet.js';
 import { setupEvents, updateSlippageBtn, renderAllQuickButtons, showToast, applyChainUI } from './ui.js';
 import { detectToken } from './token.js';
-import { setConnection } from './sol/connection.js';
+import { setConnection, stopBlockhashPrefetch } from './sol/connection.js';
 import { loadApprovedTokens } from './trading.js';
 
 // ── Storage keys per chain ──────────────────────────────────────────────────
@@ -40,6 +40,12 @@ function initSol(config) {
   return initSolWalletKeypairs();
 }
 
+async function initSolWalletsOnly(config) {
+  state.solConfig.rpcUrl = config.solRpcUrl || '';
+  stopBlockhashPrefetch();
+  return initSolWalletKeypairs();
+}
+
 // ── Chain config save/restore ───────────────────────────────────────────────
 function solToLamports(solValue) {
   const n = parseFloat(solValue);
@@ -56,7 +62,7 @@ function saveChainConfig() {
     chrome.storage.local.set({
       slippage: $('slippage')?.value,
       gasPrice: $('gasPriceInput')?.value,
-      buyAmount: $('amount')?.value,
+      buyAmount: state.amountDrafts.bsc.buy || '',
     });
   } else {
     const priorityFeeLamports = solToLamports($('gasPriceInput')?.value);
@@ -67,7 +73,7 @@ function saveChainConfig() {
       solSlippage: $('slippage')?.value,
       solPriorityFee: priorityFeeLamports,
       solJitoTip: jitoTipLamports,
-      solBuyAmount: $('amount')?.value,
+      solBuyAmount: state.amountDrafts.sol.buy || '',
     });
   }
 }
@@ -76,7 +82,8 @@ function restoreChainConfig(config) {
   if (state.currentChain === 'bsc') {
     if (config.slippage) { $('slippage').value = config.slippage; updateSlippageBtn(config.slippage); }
     if (config.gasPrice) { $('gasPriceInput').value = config.gasPrice; }
-    if (config.buyAmount) { $('amount').value = config.buyAmount; }
+    state.config.buyAmount = config.buyAmount || '';
+    if (!state.amountDrafts.bsc.buy) state.amountDrafts.bsc.buy = state.config.buyAmount;
     state.config.customQuickBuy = config.customQuickBuy;
     state.config.customSlipValues = config.customSlipValues;
     state.config.customBuyAmounts = config.customBuyAmounts;
@@ -91,10 +98,11 @@ function restoreChainConfig(config) {
     $('gasPriceInput').value = lamportsToSol(feeLamports);
     const jitoInput = $('jitoTipInput');
     if (jitoInput) jitoInput.value = lamportsToSol(jitoLamports);
-    if (amt) $('amount').value = amt;
 
     state.solConfig.priorityFee = Number(feeLamports);
     state.solConfig.jitoTip = Number(jitoLamports);
+    state.config.solBuyAmount = amt;
+    if (!state.amountDrafts.sol.buy) state.amountDrafts.sol.buy = amt;
     state.config.solCustomQuickBuy = config.solCustomQuickBuy;
     state.config.solCustomSlipValues = config.solCustomSlipValues;
     state.config.solCustomBuyAmounts = config.solCustomBuyAmounts;
@@ -123,6 +131,8 @@ async function switchChain(chain) {
 
   if (chain === 'sol') {
     await initSol(config);
+  } else {
+    stopBlockhashPrefetch();
   }
 
   applyChainUI();
@@ -161,7 +171,8 @@ async function initAfterUnlock() {
   // initBsc must complete first: it calls initWallets() which populates both BSC and SOL
   // address maps; initSol then reads the cached result for SOL addresses
   await Promise.all([initBsc(state.config), loadApprovedTokens()]);
-  await initSol(state.config);
+  if (state.currentChain === 'sol') await initSol(state.config);
+  else await initSolWalletsOnly(state.config);
 
   restoreChainConfig(state.config);
   applyChainUI();
@@ -191,13 +202,17 @@ function onReady() {
   setInterval(loadBalances, 30000);
   chrome.runtime.onMessage.addListener((message) => {
     if (message.type === 'SOL_RPC_UPDATED') {
-      setConnection(
-        message.rpcUrl || 'https://solana-rpc.publicnode.com',
-        message.wssUrl || undefined,
-      );
       state.solConfig.rpcUrl = message.rpcUrl || '';
+      if (state.currentChain === 'sol') {
+        setConnection(
+          message.rpcUrl || 'https://solana-rpc.publicnode.com',
+          message.wssUrl || undefined,
+        );
+      } else {
+        stopBlockhashPrefetch();
+      }
       showToast('SOL RPC 已切换', 'success');
-      loadBalances();
+      if (state.currentChain === 'sol') loadBalances();
       return;
     }
 
